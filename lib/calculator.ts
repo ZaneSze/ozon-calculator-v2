@@ -1,0 +1,1387 @@
+/**
+ * Ozon rFBS 跨境精算核心代数模型
+ * 严格遵循 PRD v2.1 RMB主导模式
+ * 
+ * 核心变量定义（RMB主导）：
+ *   P_rmb = 用户输入的售价 (RMB)
+ *   P_rub = P_rmb / E  (E = 汇率 RMB/RUB, 即 1 RUB = E RMB)
+ *   E = 汇率 (RMB/RUB)
+ *   C = 平台佣金率(%)
+ *   W = 提现手续费率(%)
+ *   Acpa = CPA广告占比(%)
+ *   Fcpc = CPC广告单均转化成本(RMB)
+ *   Rcost = 单件分摊退货成本(RMB)
+ *   Ftotal = 单件总固定成本(RMB)
+ *   M = 有效边际贡献率 = (1 - C) * (1 - W) - Acpa
+ *
+ * 终极公式：
+ *   正向算利润：净利润(RMB) = P_rmb * M - Ftotal
+ *   逆向算售价：P_rmb = (Ftotal + 目标利润) / M
+ *               P_rub = P_rmb / E
+ *   佣金匹配：必须用 P_rub 去匹配 Ozon 三个阶梯
+ */
+
+import { CalculationInput, CalculationResult, CategoryCommission, ShippingChannel } from "./types";
+import { calculateShippingCost } from "./data-hub-context";
+
+// 佣金阶梯边界常量（RUB）
+const TIER_BOUNDARIES = [
+  { min: 0, max: 1500 },
+  { min: 1500.01, max: 5000 },
+  { min: 5000.01, max: Infinity },
+];
+
+/**
+ * 根据卢布售价获取对应阶梯的佣金率
+ * 注意：佣金匹配始终用 P_rub
+ */
+export function getCommissionRate(
+  commission: CategoryCommission,
+  priceRUB: number
+): number {
+  console.log(`\n[getCommissionRate] 开始匹配`);
+  console.log(`  输入 priceRUB: ${priceRUB.toFixed(2)}`);
+  console.log(`  类目: ${commission.primaryCategory} > ${commission.secondaryCategory}`);
+  console.log(`  阶梯数据:`);
+  
+  for (let i = 0; i < commission.tiers.length; i++) {
+    const tier = commission.tiers[i];
+    console.log(`    阶梯${i+1}: ${tier.min}-${tier.max === Infinity ? '∞' : tier.max} RUB → ${tier.rate}%`);
+    
+    if (priceRUB >= tier.min && priceRUB <= tier.max) {
+      console.log(`  ✅ 匹配成功: 阶梯${i+1}, 佣金率 ${tier.rate}%`);
+      return tier.rate;
+    }
+  }
+  
+  const fallback = commission.tiers[commission.tiers.length - 1].rate;
+  console.log(`  ⚠️ 未匹配，使用最后一阶梯: ${fallback}%`);
+  return fallback;
+}
+
+/**
+ * 计算体积重 (g)
+ * 公式：长×宽×高 / 12000 (单位: cm, 结果: g)
+ */
+export function calculateVolumetricWeight(
+  length: number,
+  width: number,
+  height: number
+): number {
+  return (length * width * height) / 12000;
+}
+
+/**
+ * 获取计费重量 (g)
+ */
+export function getChargeableWeight(
+  length: number,
+  width: number,
+  height: number,
+  actualWeight: number
+): { volumetric: number; chargeable: number; isVolumetric: boolean } {
+  const volumetric = calculateVolumetricWeight(length, width, height);
+  const chargeable = Math.max(volumetric, actualWeight);
+  return {
+    volumetric,
+    chargeable,
+    isVolumetric: volumetric > actualWeight,
+  };
+}
+
+/**
+ * 计算单件分摊退货成本 (RMB)
+ */
+export function calculateReturnCost(
+  returnHandling: "destroy" | "resell" | "productOnly",
+  returnRate: number,
+  purchaseCost: number,
+  domesticShipping: number,
+  internationalShipping: number
+): number {
+  const rate = returnRate / 100;
+  switch (returnHandling) {
+    case "destroy":
+      return (purchaseCost + domesticShipping + internationalShipping) * rate;
+    case "resell":
+      return internationalShipping * rate;
+    case "productOnly":
+      return purchaseCost * rate;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * 计算 CPC 广告单均转化成本 (RMB)
+ * F_cpc = (单次竞价 / 转化率) × 汇率E
+ */
+export function calculateCpcCost(
+  cpcEnabled: boolean,
+  cpcBid: number, // RUB
+  cpcConversionRate: number, // 百分比
+  exchangeRate: number // RMB/RUB
+): number {
+  if (!cpcEnabled || cpcConversionRate <= 0) return 0;
+  const cvr = cpcConversionRate / 100;
+  return (cpcBid / cvr) * exchangeRate;
+}
+
+/**
+ * 计算 CPA 广告费 (RMB)
+ * A_cpa = P_rmb × CPA占比
+ * 注意：售价已经是 RMB，不需要再乘汇率
+ */
+export function calculateCpaCost(
+  cpaEnabled: boolean,
+  cpaRate: number, // 百分比
+  priceRMB: number // RMB
+): number {
+  if (!cpaEnabled) return 0;
+  return priceRMB * (cpaRate / 100);
+}
+
+/**
+ * 计算有效边际贡献率 M
+ * M = (1 - C) × (1 - W) - A_cpa
+ */
+export function calculateMarginalContribution(
+  commissionRate: number,
+  withdrawalFee: number,
+  cpaRate: number
+): number {
+  const C = commissionRate / 100;
+  const W = withdrawalFee / 100;
+  const Acpa = cpaRate / 100;
+  return (1 - C) * (1 - W) - Acpa;
+}
+
+/**
+ * 核心：正向算利润 (RMB主导模式)
+ * 净利润 (RMB) = P_rmb × M - F_total
+ */
+export function calculateNetProfit(
+  priceRMB: number,
+  marginalContribution: number,
+  totalFixedCost: number
+): number {
+  return priceRMB * marginalContribution - totalFixedCost;
+}
+
+/**
+ * 核心：逆向算售价 (RMB主导模式)
+ * P_rmb = (F_total + 目标利润) / M
+ * 返回 RMB 售价
+ */
+export function calculateRequiredPriceRMB(
+  targetProfitRMB: number,
+  marginalContribution: number,
+  totalFixedCost: number
+): number {
+  if (marginalContribution <= 0) return Infinity;
+  return (totalFixedCost + targetProfitRMB) / marginalContribution;
+}
+
+/**
+ * 高阶逆向推价：根据目标利润率反推售价（含阶梯佣金迭代匹配）
+ * 
+ * 核心公式：P_rmb = F_total / (M - T_m)
+ * 其中：
+ *   T_m = 目标利润率（如 0.2 表示 20%）
+ *   M = 有效边际贡献率 = (1 - C) * (1 - W) - A_cpa
+ *   F_total = 总固定成本（采购+头程+包装+国际运费+CPC+退货）
+ * 
+ * 难点：M 和 F_total 都依赖售价（佣金阶梯、CPA 费）
+ * 解决：迭代算法，最多迭代 5 次
+ * 
+ * 返回：{ priceRMB, commissionRate, error }
+ */
+export function reversePriceFromMargin(
+  targetMarginPercent: number,
+  input: CalculationInput,
+  commission: CategoryCommission,
+  shippingChannel: ShippingChannel | undefined
+): { priceRMB: number; commissionRate: number; error?: string } {
+  
+  const T_m = targetMarginPercent / 100;
+  
+  // 1. 计算不依赖售价的固定成本部分
+  const purchaseCost = input.purchaseCost;
+  const domesticShipping = input.domesticShipping;
+  const packagingFee = input.packagingFee;
+  const cpcCost = calculateCpcCost(input.cpcEnabled, input.cpcBid, input.cpcConversionRate, input.exchangeRate);
+  
+  // 体积重
+  const { chargeable: chargeableWeight } = getChargeableWeight(input.length, input.width, input.height, input.weight);
+  const baseShippingCost = shippingChannel ? calculateShippingCost(shippingChannel, chargeableWeight) : 0;
+  
+  // 退货成本（需要国际运费）
+  const calcReturnCost = (internationalShipping: number) => {
+    return calculateReturnCost(input.returnHandling, input.returnRate, purchaseCost, domesticShipping, internationalShipping);
+  };
+  
+  // 2. 迭代算法
+  let currentPriceRMB = input.targetPriceRMB || 100; // 初始猜测
+  let lastPriceRMB = 0;
+  let iteration = 0;
+  const MAX_ITERATIONS = 5;
+  
+  while (iteration < MAX_ITERATIONS && Math.abs(currentPriceRMB - lastPriceRMB) > 0.01) {
+    lastPriceRMB = currentPriceRMB;
+    
+    // 用当前售价计算 P_rub 和佣金率
+    const priceRUB = currentPriceRMB / input.exchangeRate;
+    const commissionRate = getCommissionRate(commission, priceRUB);
+    
+    // 计算边际贡献率 M
+    const cpaRateForM = input.cpaEnabled ? input.cpaRate : 0;
+    const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM);
+    
+    // 熔断检测：M - T_m <= 0
+    if (M <= T_m) {
+      return {
+        priceRMB: 0,
+        commissionRate,
+        error: `目标利润率过高！当前佣金${commissionRate}%、广告率${cpaRateForM}%、手续费${input.withdrawalFee}%已占据过多空间，最大可实现利润率为 ${((M) * 100).toFixed(1)}%`
+      };
+    }
+    
+    // 计算国际运费
+    const internationalShipping = shippingChannel ? calculateShippingCost(shippingChannel, chargeableWeight) : 0;
+    
+    // 计算退货成本
+    const returnCost = calcReturnCost(internationalShipping);
+    
+    // 计算总固定成本 F_total
+    const F_total = purchaseCost + domesticShipping + packagingFee + internationalShipping + cpcCost + returnCost;
+    
+    // 逆向公式：P_rmb = F_total / (M - T_m)
+    currentPriceRMB = F_total / (M - T_m);
+    
+    // 边界保护
+    if (!isFinite(currentPriceRMB) || currentPriceRMB < 0) {
+      return {
+        priceRMB: 0,
+        commissionRate,
+        error: "计算异常：无法推演出合法售价"
+      };
+    }
+    
+    iteration++;
+  }
+  
+  // 3. 最终验证：新售价对应的佣金阶梯是否匹配
+  const finalPriceRUB = currentPriceRMB / input.exchangeRate;
+  const finalCommissionRate = getCommissionRate(commission, finalPriceRUB);
+  
+  // 验证是否跨阶梯（如果跨阶梯，需要再迭代一次）
+  const validation = validatePriceForTier(currentPriceRMB, input.exchangeRate, commission);
+  if (!validation.valid) {
+    // 跨阶梯了，再迭代一轮
+    const M = calculateMarginalContribution(finalCommissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0);
+    if (M <= T_m) {
+      return {
+        priceRMB: 0,
+        commissionRate: finalCommissionRate,
+        error: `目标利润率过高！最大可实现利润率为 ${((M) * 100).toFixed(1)}%`
+      };
+    }
+    
+    const internationalShipping = shippingChannel ? calculateShippingCost(shippingChannel, chargeableWeight) : 0;
+    const returnCost = calcReturnCost(internationalShipping);
+    const F_total = purchaseCost + domesticShipping + packagingFee + internationalShipping + cpcCost + returnCost;
+    currentPriceRMB = F_total / (M - T_m);
+  }
+  
+  return {
+    priceRMB: parseFloat(currentPriceRMB.toFixed(2)),
+    commissionRate: finalCommissionRate,
+    error: undefined
+  };
+}
+
+/**
+ * 验证逆向售价是否合法（落在对应佣金阶梯区间）
+ * 使用 P_rub = P_rmb / E 去匹配阶梯
+ */
+export function validatePriceForTier(
+  priceRMB: number,
+  exchangeRate: number,
+  commission: CategoryCommission
+): { valid: boolean; tier: number; rate: number; priceRUB: number } {
+  const priceRUB = priceRMB / exchangeRate;
+  for (let i = 0; i < commission.tiers.length; i++) {
+    const tier = commission.tiers[i];
+    if (priceRUB >= tier.min && priceRUB <= tier.max) {
+      return { valid: true, tier: i, rate: tier.rate, priceRUB };
+    }
+  }
+  return { valid: false, tier: -1, rate: 0, priceRUB };
+}
+
+/**
+ * 六档定价推荐矩阵（固定锚点）- 迭代算法版本
+ * 使用迭代法解决佣金阶梯与售价的循环依赖问题
+ * 
+ * 六个固定锚点：
+ * - 引流价 (-5%): 用于破零，亏损引流
+ * - 保本价 (0%): 绝对底线
+ * - 起量价 (8%): 追求销量
+ * - 常规价 (18%): 日常运营
+ * - 高毛利 (30%): 核心盈利
+ * - 极限价 (45%): 测试溢价空间
+ * 
+ * 标准公式：P_target = (采购 + 头程 + 包装 + 跨境运费 + 退货损耗 + CPC成本) / ((1 - 佣金%) × (1 - 提现手续费%) - CPA广告% - 目标利润%)
+ */
+export function calculateSixTierPricing(
+  input: CalculationInput,
+  commission: CategoryCommission,
+  shippingChannel: ShippingChannel | undefined
+): Array<{
+  label: string;
+  profitMargin: number;
+  priceRMB: number;
+  priceRUB: number;
+  description: string;
+  color: string;
+  disabled: boolean;
+  error?: string;
+}> {
+  // 六个固定利润率锚点
+  const anchors = [
+    { label: "引流价", profitMargin: -5, description: "仅用于破零", color: "red" },
+    { label: "保本价", profitMargin: 0, description: "绝对底线", color: "orange" },
+    { label: "起量价", profitMargin: 8, description: "追求销量", color: "amber" },
+    { label: "常规价", profitMargin: 18, description: "日常运营", color: "green" },
+    { label: "高毛利", profitMargin: 30, description: "核心盈利", color: "blue" },
+    { label: "极限价", profitMargin: 45, description: "测试溢价", color: "purple" },
+  ];
+
+  // 🔹 计算固定成本
+  const purchaseCost = input.purchaseCost;
+  const domesticShipping = input.domesticShipping;
+  const packagingFee = input.packagingFee;
+  
+  // 体积重
+  const { chargeable } = getChargeableWeight(input.length, input.width, input.height, input.weight);
+  const internationalShipping = shippingChannel ? calculateShippingCost(shippingChannel, chargeable) : 0;
+  
+  // 退货成本
+  const returnCost = calculateReturnCost(input.returnHandling, input.returnRate, purchaseCost, domesticShipping, internationalShipping);
+  
+  // 🔹 CPC 广告单均转化成本
+  const cpcCost = calculateCpcCost(input.cpcEnabled, input.cpcBid, input.cpcConversionRate, input.exchangeRate);
+  
+  // 🔹 总固定成本：采购+头程+包装+跨境运费+退货损耗+CPC成本
+  const totalFixedCost = purchaseCost + domesticShipping + packagingFee + internationalShipping + returnCost + cpcCost;
+  
+  // 🔹 安全校验：汇率和固定成本
+  const exchangeRate = parseFloat(String(input.exchangeRate)) || 0.082;
+  const fixedCost = parseFloat(String(totalFixedCost)) || 0;
+  const withdrawalFee = parseFloat(String(input.withdrawalFee)) || 1.5;
+  const cpaRate = input.cpaEnabled ? (parseFloat(String(input.cpaRate)) || 0) : 0;
+
+  console.log("=== 六档定价推荐矩阵计算开始 ===");
+  console.log("总固定成本:", fixedCost.toFixed(2), "RMB");
+  console.log("  - 采购:", purchaseCost.toFixed(2));
+  console.log("  - 头程:", domesticShipping.toFixed(2));
+  console.log("  - 包装:", packagingFee.toFixed(2));
+  console.log("  - 跨境运费:", internationalShipping.toFixed(2));
+  console.log("  - 退货损耗:", returnCost.toFixed(2));
+  console.log("  - CPC成本:", cpcCost.toFixed(2));
+  console.log("汇率:", exchangeRate);
+  console.log("提现手续费:", withdrawalFee, "%");
+  console.log("CPA广告率:", cpaRate, "%");
+  console.log("佣金阶梯:", commission.tiers.map(t => `${t.min}-${t.max === Infinity ? '∞' : t.max}:${t.rate}%`).join(', '));
+
+  return anchors.map((anchor) => {
+    const T_m = anchor.profitMargin / 100; // 转换为小数
+    
+    console.log(`\n--- ${anchor.label} (目标利润率 ${anchor.profitMargin}%) ---`);
+    console.log("目标利润率 T_m:", T_m);
+    
+    // 🔹 使用迭代算法求解
+    let currentPriceRMB = 100; // 初始猜测值
+    let lastPriceRMB = 0;
+    let iteration = 0;
+    const MAX_ITERATIONS = 10;
+    let finalCommissionRate = 0;
+    let finalM = 0;
+    let converged = false;
+    
+    while (iteration < MAX_ITERATIONS && !converged) {
+      lastPriceRMB = currentPriceRMB;
+      
+      // 1. 根据当前售价计算 P_rub
+      const priceRUB = currentPriceRMB / exchangeRate;
+      
+      // 2. 🔹 根据 P_rub 匹配佣金率（核心修复点）
+      const commissionRate = getCommissionRate(commission, priceRUB);
+      finalCommissionRate = commissionRate;
+      
+      // 3. 计算边际贡献率 M
+      const M = calculateMarginalContribution(commissionRate, withdrawalFee, cpaRate);
+      finalM = M;
+      
+      // 4. 检查分母
+      const denominator = M - T_m;
+      
+      if (denominator <= 0) {
+        console.log(`  迭代 ${iteration}: 分母 ${denominator.toFixed(6)} <= 0，无法达到目标利润率`);
+        console.log(`    当前佣金率=${commissionRate}%, M=${(M*100).toFixed(4)}%, 最大可实现利润率=${(M*100).toFixed(1)}%`);
+        break;
+      }
+      
+      // 5. 逆向公式计算新的售价
+      const newPriceRMB = fixedCost / denominator;
+      
+      // 🔹 安全校验：检查计算结果是否合法
+      if (!isFinite(newPriceRMB) || isNaN(newPriceRMB) || newPriceRMB <= 0) {
+        console.log(`  迭代 ${iteration}: 计算结果不合法 P_rmb=${newPriceRMB}`);
+        break;
+      }
+      
+      currentPriceRMB = newPriceRMB;
+      
+      console.log(`  迭代 ${iteration}: P_rmb=${currentPriceRMB.toFixed(2)}, P_rub=${(currentPriceRMB/exchangeRate).toFixed(2)}, 佣金=${commissionRate}%, M=${(M*100).toFixed(4)}%, 分母=${denominator.toFixed(6)}`);
+      
+      // 检查是否收敛
+      if (Math.abs(currentPriceRMB - lastPriceRMB) < 0.01) {
+        converged = true;
+        console.log(`  ✓ 已收敛`);
+      }
+      
+      iteration++;
+    }
+    
+    // 🔹 计算最终卢布价格（确保数值合法）
+    let finalPriceRUB = 0;
+    let finalPriceRMB = 0;
+    
+    if (converged && isFinite(currentPriceRMB) && currentPriceRMB > 0) {
+      finalPriceRMB = parseFloat(currentPriceRMB.toFixed(2));
+      finalPriceRUB = parseFloat((finalPriceRMB / exchangeRate).toFixed(0));
+      
+      // 🔹 再次验证佣金匹配
+      const verifyCommission = getCommissionRate(commission, finalPriceRUB);
+      console.log(`  最终验证: P_rmb=${finalPriceRMB}, P_rub=${finalPriceRUB}, 匹配佣金=${verifyCommission}%`);
+    }
+    
+    // 🔹 判断是否合法
+    const disabled = !converged || finalPriceRMB <= 0 || finalM <= T_m || isNaN(finalPriceRUB) || finalPriceRUB === 0;
+    let error: string | undefined;
+    
+    if (disabled) {
+      if (finalM <= T_m && finalM > 0) {
+        error = `目标利润率过高！最大可实现 ${(finalM * 100).toFixed(1)}%`;
+      } else if (!converged) {
+        error = "计算未收敛";
+      } else if (finalPriceRMB <= 0) {
+        error = "计算结果非正数";
+      } else {
+        error = "空间不足";
+      }
+      console.log(`  ❌ 失败: ${error}`);
+    } else {
+      console.log(`  ✅ 成功: ¥${finalPriceRMB} RMB (${finalPriceRUB} RUB)`);
+    }
+
+    return {
+      label: anchor.label,
+      profitMargin: anchor.profitMargin,
+      priceRMB: finalPriceRMB,
+      priceRUB: finalPriceRUB,
+      description: anchor.description,
+      color: anchor.color,
+      disabled,
+      error: disabled ? error : undefined,
+    };
+  });
+}
+
+/**
+ * 阶梯定价策略推演 (RMB主导模式)
+ * 对每个阶梯佣金率分别代入逆向公式：
+ *   P_rmb = (F_total + T) / M
+ *   P_rub = P_rmb / E
+ * 若 P_rub 落回提取该佣金C时的阶梯区间，则为合法解
+ * 返回的售价全部为 RMB
+ */
+export function calculatePricingStrategies(
+  commission: CategoryCommission,
+  exchangeRate: number,
+  withdrawalFee: number,
+  cpaRate: number,
+  totalFixedCost: number
+): {
+  breakEven: number;
+  lowProfit: number;
+  mediumProfit: number;
+  highProfit: number;
+} {
+  const strategies = {
+    breakEven: 0,
+    lowProfit: 0,
+    mediumProfit: 0,
+    highProfit: 0,
+  };
+
+  const profitTargets = [
+    0,
+    totalFixedCost * 0.1 / 0.9,
+    totalFixedCost * 0.2 / 0.8,
+    totalFixedCost * 0.3 / 0.7,
+  ];
+
+  const labels = ["breakEven", "lowProfit", "mediumProfit", "highProfit"] as const;
+
+  for (let i = 0; i < profitTargets.length; i++) {
+    const targetProfit = profitTargets[i];
+    let validPriceRMB = Infinity;
+
+    for (const tier of commission.tiers) {
+      const M = calculateMarginalContribution(tier.rate, withdrawalFee, cpaRate);
+      if (M <= 0) continue;
+
+      // 逆向求 P_rmb
+      const P_rmb = (totalFixedCost + targetProfit) / M;
+      // 转换为 P_rub 验证是否在当前阶梯区间
+      const P_rub = P_rmb / exchangeRate;
+
+      if (P_rub >= tier.min && P_rub <= tier.max) {
+        validPriceRMB = Math.min(validPriceRMB, P_rmb);
+      }
+    }
+
+    strategies[labels[i]] = validPriceRMB === Infinity ? 0 : Math.ceil(validPriceRMB * 100) / 100;
+  }
+
+  return strategies;
+}
+
+/**
+ * 黑洞预警检测 (RMB主导模式)
+ * 检测当前售价是否处于阶梯佣金跃升边缘
+ */
+export function detectCommissionBlackHole(
+  priceRMB: number,
+  exchangeRate: number,
+  commission: CategoryCommission,
+  withdrawalFee: number,
+  cpaRate: number,
+  totalFixedCost: number,
+  cpcCost: number
+): string | null {
+  const priceRUB = priceRMB / exchangeRate;
+  const currentRate = getCommissionRate(commission, priceRUB);
+
+  for (const tier of commission.tiers) {
+    if (tier.rate < currentRate) {
+      // 将售价降到该阶梯的最大值（RUB），再转回 RMB
+      const lowerPriceRUB = tier.max;
+      const lowerPriceRMB = lowerPriceRUB * exchangeRate;
+      const M_lower = calculateMarginalContribution(tier.rate, withdrawalFee, cpaRate);
+      const M_current = calculateMarginalContribution(currentRate, withdrawalFee, cpaRate);
+
+      if (M_lower > 0 && M_current > 0) {
+        const profitLower = calculateNetProfit(lowerPriceRMB, M_lower, totalFixedCost);
+        const profitCurrent = calculateNetProfit(priceRMB, M_current, totalFixedCost);
+
+        if (profitLower > profitCurrent && profitLower > 0) {
+          const diff = profitLower - profitCurrent;
+          return `若降价至 ${lowerPriceRUB} ₽ (¥${lowerPriceRMB.toFixed(2)}) 触发低佣金档，净利润反而提升 ¥${diff.toFixed(2)}！`;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * 汇率抗压测试 (RMB主导模式 - 修正版)
+ * 
+ * 核心逻辑：
+ * - 前台卢布售价 (P_rub) 固定不变
+ * - 汇率下跌时，RMB 售价 = P_rub × 新汇率
+ * - 跌后利润 = (前台卢布售价 × 新汇率 × 边际贡献率) - 固定成本合计
+ */
+export function calculateExchangeRateStressTest(
+  priceRMB: number,
+  exchangeRate: number,
+  commission: CategoryCommission,
+  withdrawalFee: number,
+  cpaRate: number,
+  totalFixedCost: number
+): {
+  at5PercentDrop: number;
+  at10PercentDrop: number;
+  zeroProfitRate: number;
+} {
+  // 🔹 非空校验：确保参与运算的值均经过 parseFloat()
+  const pRMB = parseFloat(String(priceRMB)) || 0;
+  const exRate = parseFloat(String(exchangeRate)) || 0.082;
+  const wFee = parseFloat(String(withdrawalFee)) || 1.5;
+  const cRate = parseFloat(String(cpaRate)) || 0;
+  const fCost = parseFloat(String(totalFixedCost)) || 0;
+  
+  // 🔹 前台卢布售价（固定）
+  const priceRUB = exRate > 0 ? pRMB / exRate : 0;
+  
+  // 当前佣金率
+  const currentCommissionRate = getCommissionRate(commission, priceRUB);
+  const currentM = calculateMarginalContribution(currentCommissionRate, wFee, cRate);
+
+  // 计算汇率下跌后的利润
+  const calcProfitAtExchangeRate = (newExchangeRate: number) => {
+    if (newExchangeRate <= 0) return -Infinity;
+    
+    // 新的 RMB 售价
+    const newPriceRMB = priceRUB * newExchangeRate;
+    // 新的卢布售价（理论上不变，但佣金阶梯可能变化）
+    const newPriceRUB = newPriceRMB / newExchangeRate;
+    // 获取新的佣金率
+    const newCommissionRate = getCommissionRate(commission, newPriceRUB);
+    // 计算新的边际贡献率
+    const M = calculateMarginalContribution(newCommissionRate, wFee, cRate);
+    
+    if (M <= 0) return -Infinity;
+    // 🔹 修正公式：跌后利润 = (P_rub × 新汇率 × 边际贡献率) - 固定成本
+    return calculateNetProfit(newPriceRMB, M, fCost);
+  };
+
+  // 汇率下跌 5%
+  const at5PercentDrop = calcProfitAtExchangeRate(exRate * 0.95);
+  
+  // 汇率下跌 10%
+  const at10PercentDrop = calcProfitAtExchangeRate(exRate * 0.90);
+
+  // 🔹 0 利润极值汇率：公式 = F_fixed / (P_rub × M)
+  let zeroProfitRate = 0;
+  
+  // 🔹 计算当前利润
+  const currentProfit = currentM > 0 ? calculateNetProfit(pRMB, currentM, fCost) : -fCost;
+  
+  if (currentM > 0 && priceRUB > 0 && currentProfit > 0) {
+    // 在当前佣金阶梯下的 0 利润汇率
+    // 利润 = P_rub × E × M - F_total = 0
+    // E = F_total / (P_rub × M)
+    const denominator = priceRUB * currentM;
+    zeroProfitRate = denominator > 0 ? fCost / denominator : 0;
+    
+    // 验证该汇率对应的佣金阶梯是否一致
+    if (zeroProfitRate > 0) {
+      const testPriceRMB = priceRUB * zeroProfitRate;
+      const testPriceRUB = testPriceRMB / zeroProfitRate;
+      const testCommissionRate = getCommissionRate(commission, testPriceRUB);
+      
+      if (testCommissionRate !== currentCommissionRate) {
+        // 如果跨阶梯，需要迭代求解
+        // 简化处理：使用二分法逼近
+        let low = 0.01;
+        let high = exRate * 2;
+        
+        for (let i = 0; i < 20; i++) {
+          const mid = (low + high) / 2;
+          const profit = calcProfitAtExchangeRate(mid);
+          
+          if (!isFinite(profit)) {
+            break;
+          }
+          
+          if (Math.abs(profit) < 0.01) {
+            zeroProfitRate = mid;
+            break;
+          }
+          
+          if (profit > 0) {
+            high = mid;
+          } else {
+            low = mid;
+          }
+        }
+      }
+    }
+  }
+  
+  // 🔹 逻辑纠偏：如果当前利润为正，绝对禁止显示'已无法保本'（zeroProfitRate必须>0）
+  // 只有当分母为 0 时才触发此状态
+  if (currentProfit <= 0) {
+    zeroProfitRate = 0; // 当前已亏损，无法计算极值
+  }
+
+  return { 
+    at5PercentDrop: isFinite(at5PercentDrop) ? at5PercentDrop : -Infinity,
+    at10PercentDrop: isFinite(at10PercentDrop) ? at10PercentDrop : -Infinity,
+    zeroProfitRate: isFinite(zeroProfitRate) && zeroProfitRate > 0 ? zeroProfitRate : 0
+  };
+}
+
+/**
+ * 利润演练：计算一个售价区间内的利润曲线数据 (RMB主导模式)
+ * priceRange 为 RMB 售价数组
+ */
+export function calculateProfitCurve(
+  priceRangeRMB: number[],
+  exchangeRate: number,
+  commission: CategoryCommission,
+  withdrawalFee: number,
+  cpaRate: number,
+  totalFixedCost: number
+): { priceRMB: number; priceRUB: number; profit: number; commissionRate: number }[] {
+  return priceRangeRMB.map((priceRMB) => {
+    const priceRUB = priceRMB / exchangeRate;
+    const rate = getCommissionRate(commission, priceRUB);
+    const M = calculateMarginalContribution(rate, withdrawalFee, cpaRate);
+    const profit = M > 0 ? calculateNetProfit(priceRMB, M, totalFixedCost) : -totalFixedCost;
+    return { priceRMB, priceRUB, profit, commissionRate: rate };
+  });
+}
+
+/**
+ * 计算多件装分摊运费利润 (RMB主导模式)
+ */
+export function calculateMultiItemProfit(
+  itemCount: number,
+  input: CalculationInput,
+  shippingChannel: ShippingChannel,
+  commission: CategoryCommission
+): { profitPerItem: number; totalProfit: number; profitMargin: number } {
+  const chargeableWeight = getChargeableWeight(input.length, input.width, input.height, input.weight).chargeable;
+  const singleShippingCost = calculateShippingCost(shippingChannel, chargeableWeight);
+  const totalWeight = chargeableWeight * itemCount;
+  const totalShippingCost = calculateShippingCost(shippingChannel, totalWeight);
+  const shippingPerItem = totalShippingCost / itemCount;
+
+  const returnCost = calculateReturnCost(
+    input.returnHandling,
+    input.returnRate,
+    input.purchaseCost,
+    input.domesticShipping,
+    shippingPerItem
+  );
+
+  const cpcCost = calculateCpcCost(input.cpcEnabled, input.cpcBid, input.cpcConversionRate, input.exchangeRate);
+  const cpaCost = calculateCpaCost(input.cpaEnabled, input.cpaRate, input.targetPriceRMB);
+
+  const totalFixedCost = input.purchaseCost + input.domesticShipping + input.packagingFee + shippingPerItem + cpcCost + returnCost;
+
+  const priceRUB = input.targetPriceRMB / input.exchangeRate;
+  const commissionRate = getCommissionRate(commission, priceRUB);
+  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0);
+
+  if (M <= 0) {
+    return { profitPerItem: -Infinity, totalProfit: -Infinity, profitMargin: -Infinity };
+  }
+
+  const profitPerItem = calculateNetProfit(input.targetPriceRMB, M, totalFixedCost);
+  const totalProfit = profitPerItem * itemCount;
+  const revenue = input.targetPriceRMB * itemCount;
+  const profitMargin = revenue > 0 ? (totalProfit / revenue) * 100 : 0;
+
+  return { profitPerItem, totalProfit, profitMargin };
+}
+
+/**
+ * 划线原价推导 (RMB主导模式)
+ * 划线原价 = 推演售价 P_rmb / (1 - 大促折扣率)
+ */
+export function calculateOriginalPrice(
+  sellingPriceRMB: number,
+  promotionDiscount: number
+): number {
+  if (promotionDiscount >= 100) return Infinity;
+  return sellingPriceRMB / (1 - promotionDiscount / 100);
+}
+
+/**
+ * ROAS 计算 (RMB主导模式)
+ * ROAS = 收入(RMB) / 广告支出(RMB)
+ */
+export function calculateROAS(
+  priceRMB: number,
+  totalAdCost: number
+): number {
+  if (totalAdCost <= 0) return Infinity;
+  return priceRMB / totalAdCost;
+}
+
+/**
+ * 盈亏平衡 ROAS 底线
+ */
+export function calculateBreakEvenROAS(
+  totalCost: number,
+  totalAdCost: number
+): number {
+  if (totalAdCost <= 0) return 0;
+  return totalCost / totalAdCost;
+}
+
+/**
+ * 计算保本 ACOS (Advertising Cost of Sales)
+ * 公式：保本 ACOS = 毛利(扣除广告前) / 销售额
+ * 
+ * 毛利(扣除广告前) = P_rmb × (1 - C%) × (1 - W%) - F_total_without_ads
+ * 其中 F_total_without_ads 不包含广告费
+ * 
+ * CPA 模式：CPA 费用已经包含在边际贡献率 M 中，需要重新计算
+ * CPC 模式：CPC 费用在固定成本中，需要扣除
+ */
+export function calculateBreakEvenACOS(
+  priceRMB: number,
+  commissionRate: number,
+  withdrawalFee: number,
+  cpaEnabled: boolean,
+  cpaRate: number,
+  totalFixedCostWithoutAds: number
+): number {
+  if (priceRMB <= 0) return 0;
+  
+  // 计算不包含 CPA 的边际贡献率
+  const M = calculateMarginalContribution(commissionRate, withdrawalFee, 0);
+  
+  // 毛利(扣除广告前) = P_rmb × M - F_total_without_ads
+  const grossProfitBeforeAds = priceRMB * M - totalFixedCostWithoutAds;
+  
+  // 保本 ACOS = 毛利(扣除广告前) / 销售额
+  const breakEvenACOS = (grossProfitBeforeAds / priceRMB) * 100;
+  
+  return Math.max(0, breakEvenACOS);
+}
+
+/**
+ * CVR 灵敏度分析
+ * 计算 CVR 提升 1% 对成本和利润的影响
+ * 
+ * 返回：{
+ *   costReduction: 单均转化成本下降金额 (RMB),
+ *   profitIncreasePercent: 净利润提升百分比
+ * }
+ */
+export function calculateCVRsensitivity(
+  currentCVR: number, // 当前转化率 (%)
+  cpcBid: number, // 单次竞价 (RUB)
+  exchangeRate: number, // 汇率 RMB/RUB
+  currentProfit: number, // 当前净利润 (RMB)
+  priceRMB: number // 售价 (RMB)
+): {
+  costReduction: number;
+  profitIncreasePercent: number;
+  newCost: number;
+  currentCost: number;
+} {
+  if (currentCVR <= 0 || currentCVR >= 100) {
+    return {
+      costReduction: 0,
+      profitIncreasePercent: 0,
+      newCost: 0,
+      currentCost: 0
+    };
+  }
+  
+  // 当前单均转化成本
+  const currentCost = (cpcBid / (currentCVR / 100)) * exchangeRate;
+  
+  // CVR 提升 1% 后的成本
+  const newCVR = currentCVR + 1;
+  const newCost = (cpcBid / (newCVR / 100)) * exchangeRate;
+  
+  // 成本下降
+  const costReduction = currentCost - newCost;
+  
+  // 净利润提升百分比
+  const newProfit = currentProfit + costReduction;
+  const profitIncreasePercent = currentProfit > 0 
+    ? ((newProfit - currentProfit) / Math.abs(currentProfit)) * 100 
+    : 0;
+  
+  return {
+    costReduction,
+    profitIncreasePercent,
+    newCost,
+    currentCost
+  };
+}
+
+/**
+ * 佣金跳档感应
+ * 检测当前售价是否处于佣金阶梯跳档点的 ±2% 范围内
+ * 
+ * 返回：优化建议或 null
+ */
+export function detectCommissionTierBoundary(
+  priceRUB: number,
+  exchangeRate: number,
+  commission: CategoryCommission,
+  withdrawalFee: number,
+  cpaRate: number,
+  totalFixedCost: number
+): { 
+  isNearBoundary: boolean; 
+  suggestion?: string;
+  lowerPriceRUB?: number;
+  lowerPriceRMB?: number;
+  profitIncrease?: number;
+} {
+  // 佣金阶梯边界（RUB）
+  const boundaries = [1500, 5000];
+  
+  for (const boundary of boundaries) {
+    // 计算 ±2% 范围
+    const lowerBound = boundary * 0.98;
+    const upperBound = boundary * 1.02;
+    
+    // 检测是否在边界附近
+    if (priceRUB >= lowerBound && priceRUB <= upperBound) {
+      // 当前售价在边界附近，计算降价到边界以下的利润
+      const targetPriceRUB = boundary - 1; // 降到边界以下 1 RUB
+      const targetPriceRMB = targetPriceRUB * exchangeRate;
+      
+      // 计算降价后的佣金率
+      const lowerCommissionRate = getCommissionRate(commission, targetPriceRUB);
+      const currentCommissionRate = getCommissionRate(commission, priceRUB);
+      
+      // 如果降价后佣金率更低
+      if (lowerCommissionRate < currentCommissionRate) {
+        const M_lower = calculateMarginalContribution(lowerCommissionRate, withdrawalFee, cpaRate);
+        const M_current = calculateMarginalContribution(currentCommissionRate, withdrawalFee, cpaRate);
+        
+        if (M_lower > 0 && M_current > 0) {
+          const profitLower = calculateNetProfit(targetPriceRMB, M_lower, totalFixedCost);
+          const currentPriceRMB = priceRUB * exchangeRate;
+          const profitCurrent = calculateNetProfit(currentPriceRMB, M_current, totalFixedCost);
+          
+          if (profitLower > profitCurrent) {
+            return {
+              isNearBoundary: true,
+              suggestion: `💡 优化建议：微调售价至 ${targetPriceRUB.toFixed(0)} ₽ 可降低佣金比例至 ${lowerCommissionRate}%，利润反而增加 ¥${(profitLower - profitCurrent).toFixed(2)}`,
+              lowerPriceRUB: targetPriceRUB,
+              lowerPriceRMB: targetPriceRMB,
+              profitIncrease: profitLower - profitCurrent
+            };
+          }
+        }
+      }
+    }
+  }
+  
+  return { isNearBoundary: false };
+}
+
+/**
+ * 物流阶梯优化建议
+ * 检测包裹是否接近下一运费阶梯
+ * 
+ * 返回：优化建议或 null
+ */
+export function detectShippingWeightBoundary(
+  currentChargeableWeight: number,
+  shippingChannel: ShippingChannel | undefined
+): {
+  isNearBoundary: boolean;
+  suggestion?: string;
+  weightToReduce?: number;
+  costSaving?: number;
+} {
+  if (!shippingChannel) {
+    return { isNearBoundary: false };
+  }
+  
+  // 检测是否距离更轻档位不足 10% 或 50g
+  const threshold = Math.min(currentChargeableWeight * 0.1, 50);
+  
+  // 这里简化处理：假设每减少 50g 可以节省一定费用
+  // 实际应该查询物流表的阶梯定价
+  const weightToReduce = currentChargeableWeight % 50;
+  
+  if (weightToReduce > 0 && weightToReduce <= threshold) {
+    // 计算节省的费用（简化计算）
+    const costPerGram = (shippingChannel.pricePerKg || 65) / 1000;
+    const costSaving = weightToReduce * costPerGram;
+    
+    if (costSaving > 0.5) { // 只有节省超过 0.5 元才提示
+      return {
+        isNearBoundary: true,
+        suggestion: `⚠️ 边际提醒：包裹减重 ${weightToReduce.toFixed(0)}g 即可进入下一运费阶梯，每单节省 ¥${costSaving.toFixed(2)}`,
+        weightToReduce,
+        costSaving
+      };
+    }
+  }
+  
+  return { isNearBoundary: false };
+}
+
+/**
+ * 物流拦截极限检测
+ * 检测包裹尺寸是否接近物流渠道的限制
+ * 
+ * 返回：警告信息数组
+ */
+export function detectShippingDimensionLimits(
+  length: number,
+  width: number,
+  height: number,
+  shippingChannel: ShippingChannel | undefined
+): Array<{
+  type: 'length' | 'width' | 'height' | 'sum' | 'longEdge';
+  current: number;
+  limit: number;
+  warning: string;
+}> {
+  const warnings: Array<{
+    type: 'length' | 'width' | 'height' | 'sum' | 'longEdge';
+    current: number;
+    limit: number;
+    warning: string;
+  }> = [];
+  
+  if (!shippingChannel) return warnings;
+  
+  // 🔹 检测长边限制（三边中最长的边）
+  const longEdge = Math.max(length, width, height);
+  const maxLongEdge = Math.max(
+    shippingChannel.maxLength,
+    shippingChannel.maxWidth,
+    shippingChannel.maxHeight
+  );
+  
+  if (maxLongEdge > 0 && longEdge > 0) {
+    if (longEdge >= maxLongEdge * 0.95 && longEdge <= maxLongEdge) {
+      warnings.push({
+        type: 'longEdge',
+        current: longEdge,
+        limit: maxLongEdge,
+        warning: `⚠️ 长边接近物流限制 (${longEdge}/${maxLongEdge} cm)`
+      });
+    }
+    if (longEdge > maxLongEdge) {
+      warnings.push({
+        type: 'longEdge',
+        current: longEdge,
+        limit: maxLongEdge,
+        warning: `🚫 长边超出物流限制！当前 ${longEdge} cm，最大 ${maxLongEdge} cm`
+      });
+    }
+  }
+  
+  const dimensions = [
+    { type: 'length' as const, value: length, limit: shippingChannel.maxLength },
+    { type: 'width' as const, value: width, limit: shippingChannel.maxWidth },
+    { type: 'height' as const, value: height, limit: shippingChannel.maxHeight },
+  ];
+  
+  // 检测单边长度
+  for (const dim of dimensions) {
+    if (dim.limit > 0 && dim.value > 0) {
+      // 超过限制的 95% 时预警
+      if (dim.value >= dim.limit * 0.95 && dim.value <= dim.limit) {
+        warnings.push({
+          type: dim.type,
+          current: dim.value,
+          limit: dim.limit,
+          warning: `⚠️ ${dim.type === 'length' ? '长度' : dim.type === 'width' ? '宽度' : '高度'}接近物流限制 (${dim.value}/${dim.limit} cm)`
+        });
+      }
+      // 超过限制
+      if (dim.value > dim.limit) {
+        warnings.push({
+          type: dim.type,
+          current: dim.value,
+          limit: dim.limit,
+          warning: `🚫 ${dim.type === 'length' ? '长度' : dim.type === 'width' ? '宽度' : '高度'}超出物流限制！当前 ${dim.value} cm，最大 ${dim.limit} cm`
+        });
+      }
+    }
+  }
+  
+  // 检测边长总和
+  const sumDimension = length + width + height;
+  if (shippingChannel.maxSumDimension > 0 && sumDimension > 0) {
+    if (sumDimension >= shippingChannel.maxSumDimension * 0.95 && sumDimension <= shippingChannel.maxSumDimension) {
+      warnings.push({
+        type: 'sum',
+        current: sumDimension,
+        limit: shippingChannel.maxSumDimension,
+        warning: `⚠️ 边长总和接近限制 (${sumDimension}/${shippingChannel.maxSumDimension} cm)`
+      });
+    }
+    if (sumDimension > shippingChannel.maxSumDimension) {
+      warnings.push({
+        type: 'sum',
+        current: sumDimension,
+        limit: shippingChannel.maxSumDimension,
+        warning: `🚫 边长总和超出限制！当前 ${sumDimension} cm，最大 ${shippingChannel.maxSumDimension} cm`
+      });
+    }
+  }
+  
+  return warnings;
+}
+
+/**
+ * 主计算函数：综合所有输入，输出完整计算结果 (RMB主导模式)
+ */
+export function performFullCalculation(
+  input: CalculationInput,
+  commission: CategoryCommission | undefined,
+  shippingChannel: ShippingChannel | undefined
+): CalculationResult {
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+
+  // 体积重计算
+  const { volumetric: volumetricWeight, chargeable: chargeableWeight, isVolumetric } =
+    getChargeableWeight(input.length, input.width, input.height, input.weight);
+
+  if (isVolumetric) {
+    warnings.push(`泡货预警：当前将按体积重 (${chargeableWeight.toFixed(0)} g) 计费，建议优化包装尺寸。`);
+  }
+  
+  // 物流拦截极限检测
+  const dimensionWarnings = detectShippingDimensionLimits(
+    input.length,
+    input.width,
+    input.height,
+    shippingChannel
+  );
+  dimensionWarnings.forEach(dw => warnings.push(dw.warning));
+
+  // 默认佣金
+  const defaultCommission: CategoryCommission = {
+    primaryCategory: input.primaryCategory,
+    secondaryCategory: input.secondaryCategory,
+    tiers: [
+      { min: 0, max: 1500, rate: 12 },
+      { min: 1500.01, max: 5000, rate: 15 },
+      { min: 5000.01, max: Infinity, rate: 18 },
+    ],
+  };
+  const activeCommission = commission || defaultCommission;
+
+  // ===== 核心变更：用 P_rmb 算出 P_rub，再用 P_rub 匹配佣金 =====
+  const priceRMB = input.targetPriceRMB;
+  const priceRUB = priceRMB / input.exchangeRate;
+  
+  console.log(`\n=== 佣金阶梯匹配 ===`);
+  console.log(`前台售价: ${priceRMB.toFixed(2)} RMB = ${priceRUB.toFixed(2)} RUB`);
+  console.log(`佣金阶梯数据:`);
+  activeCommission.tiers.forEach((tier, i) => {
+    console.log(`  阶梯${i+1}: ${tier.min}-${tier.max === Infinity ? '∞' : tier.max} RUB → ${tier.rate}%`);
+  });
+  
+  const commissionRate = getCommissionRate(activeCommission, priceRUB);
+  console.log(`✓ 匹配结果: 佣金率 = ${commissionRate}%`);
+  
+  const matchedTier = activeCommission.tiers.find(tier => priceRUB >= tier.min && priceRUB <= tier.max);
+  if (matchedTier) {
+    console.log(`  所属阶梯: ${matchedTier.min}-${matchedTier.max === Infinity ? '∞' : matchedTier.max} RUB`);
+  }
+
+  // 物流费
+  const internationalShipping = shippingChannel
+    ? calculateShippingCost(shippingChannel, chargeableWeight)
+    : 0;
+
+  // 广告费 (RMB)
+  const cpcCost = calculateCpcCost(input.cpcEnabled, input.cpcBid, input.cpcConversionRate, input.exchangeRate);
+  const cpaCost = calculateCpaCost(input.cpaEnabled, input.cpaRate, priceRMB);
+  const totalAdCost = cpcCost + cpaCost;
+
+  // 退货成本 (RMB)
+  const returnCost = calculateReturnCost(
+    input.returnHandling,
+    input.returnRate,
+    input.purchaseCost,
+    input.domesticShipping,
+    internationalShipping
+  );
+
+  // 总固定成本 F_total (RMB)
+  const totalFixedCost =
+    input.purchaseCost +
+    input.domesticShipping +
+    input.packagingFee +
+    internationalShipping +
+    cpcCost +
+    returnCost;
+
+  // 有效边际贡献率 M
+  const cpaRateForM = input.cpaEnabled ? input.cpaRate : 0;
+  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM);
+
+  // 熔断检测
+  if (M <= 0) {
+    warnings.push("严重警告：平台抽成、广告率与手续费之和已超 100%，无论如何定价皆亏损！");
+  }
+
+  // ===== 正向算利润：净利润(RMB) = P_rmb × M - F_total =====
+  const netProfit = M > 0 ? calculateNetProfit(priceRMB, M, totalFixedCost) : -totalFixedCost;
+
+  // 平台抽成金额 (RMB) = P_rmb × C%
+  const commissionAmount = priceRMB * (commissionRate / 100);
+
+  // 提现手续费金额 (RMB) = P_rmb × (1-C%) × W%
+  const withdrawalFeeAmount = priceRMB * (1 - commissionRate / 100) * (input.withdrawalFee / 100);
+
+  // 🔹 成本结构详细日志
+  console.log(`\n=== 成本结构明细 ===`);
+  console.log(`采购成本: ${input.purchaseCost.toFixed(2)} RMB`);
+  console.log(`头程杂费: ${input.domesticShipping.toFixed(2)} RMB`);
+  console.log(`包装费: ${input.packagingFee.toFixed(2)} RMB`);
+  console.log(`跨境运费: ${internationalShipping.toFixed(2)} RMB`);
+  console.log(`平台佣金: ${commissionAmount.toFixed(2)} RMB (${commissionRate}%)`);
+  console.log(`提现手续费: ${withdrawalFeeAmount.toFixed(2)} RMB (${input.withdrawalFee}%)`);
+  console.log(`CPA广告: ${cpaCost.toFixed(2)} RMB`);
+  console.log(`CPC广告: ${cpcCost.toFixed(2)} RMB`);
+  console.log(`退货损耗: ${returnCost.toFixed(2)} RMB`);
+  console.log(`---`);
+  console.log(`总固定成本: ${totalFixedCost.toFixed(2)} RMB`);
+  console.log(`总成本: ${(totalFixedCost + commissionAmount + withdrawalFeeAmount + cpaCost).toFixed(2)} RMB`);
+
+  // ROI
+  const totalInvestment = input.purchaseCost + input.domesticShipping + input.packagingFee + internationalShipping;
+  const roi = totalInvestment > 0 ? (netProfit / totalInvestment) * 100 : 0;
+
+  // 销售利润率 = 净利润 / 收入(P_rmb)
+  const profitMargin = priceRMB > 0 ? (netProfit / priceRMB) * 100 : 0;
+
+  // 定价策略 (返回 RMB)
+  const pricingStrategies = calculatePricingStrategies(
+    activeCommission,
+    input.exchangeRate,
+    input.withdrawalFee,
+    cpaRateForM,
+    totalFixedCost
+  );
+
+  // 黑洞预警
+  const blackHoleWarning = detectCommissionBlackHole(
+    priceRMB,
+    input.exchangeRate,
+    activeCommission,
+    input.withdrawalFee,
+    cpaRateForM,
+    totalFixedCost,
+    cpcCost
+  );
+  if (blackHoleWarning) {
+    suggestions.push(blackHoleWarning);
+  }
+
+  // ROAS
+  const roas = calculateROAS(priceRMB, totalAdCost);
+  const breakEvenROAS = calculateBreakEvenROAS(totalFixedCost + totalAdCost, totalAdCost);
+  if (totalAdCost > 0 && roas < breakEvenROAS) {
+    warnings.push(`ROAS (${roas.toFixed(2)}) 低于盈亏平衡底线 (${breakEvenROAS.toFixed(2)})，广告投放亏损！`);
+  }
+
+  // ===== 新增：广告风控计算 =====
+  // 计算不包含广告费的固定成本
+  const totalFixedCostWithoutAds = 
+    input.purchaseCost + 
+    input.domesticShipping + 
+    input.packagingFee + 
+    internationalShipping + 
+    returnCost;
+  
+  // 计算保本 ACOS
+  const breakEvenACOS = calculateBreakEvenACOS(
+    priceRMB,
+    commissionRate,
+    input.withdrawalFee,
+    input.cpaEnabled,
+    input.cpaEnabled ? input.cpaRate : 0,
+    totalFixedCostWithoutAds
+  );
+  
+  // 计算当前 ACOS
+  const currentACOS = priceRMB > 0 ? (totalAdCost / priceRMB) * 100 : 0;
+  
+  // 检测是否超预算（广告费超过毛利）
+  const grossProfitBeforeAds = priceRMB * M - totalFixedCostWithoutAds;
+  const isOverBudget = totalAdCost > grossProfitBeforeAds && totalAdCost > 0;
+  
+  // CVR 灵敏度分析（仅当 CPC 启用时）
+  const cvrSensitivity = input.cpcEnabled && input.cpcConversionRate > 0
+    ? calculateCVRsensitivity(
+        input.cpcConversionRate,
+        input.cpcBid,
+        input.exchangeRate,
+        netProfit,
+        priceRMB
+      )
+    : undefined;
+  
+  // ===== 新增：智能提醒计算 =====
+  // 佣金跳档感应
+  const commissionTierBoundary = detectCommissionTierBoundary(
+    priceRUB,
+    input.exchangeRate,
+    activeCommission,
+    input.withdrawalFee,
+    cpaRateForM,
+    totalFixedCost
+  );
+  
+  // 物流阶梯优化
+  const shippingWeightBoundary = detectShippingWeightBoundary(
+    chargeableWeight,
+    shippingChannel
+  );
+  
+  // 添加智能提醒到建议列表
+  if (commissionTierBoundary.isNearBoundary && commissionTierBoundary.suggestion) {
+    suggestions.push(commissionTierBoundary.suggestion);
+  }
+  if (shippingWeightBoundary.isNearBoundary && shippingWeightBoundary.suggestion) {
+    suggestions.push(shippingWeightBoundary.suggestion);
+  }
+
+  // 亏损警告
+  if (netProfit < 0) {
+    warnings.push(`当前定价亏损 ¥${Math.abs(netProfit).toFixed(2)}，请提高售价或降低成本！`);
+  }
+
+  return {
+    netProfit,
+    roi,
+    profitMargin,
+    commissionRate,
+    costs: {
+      purchase: input.purchaseCost,
+      domesticShipping: input.domesticShipping,
+      packaging: input.packagingFee,
+      internationalShipping,
+      commission: commissionAmount,
+      cpaCost,
+      cpcCost,
+      returnCost,
+      withdrawalFee: withdrawalFeeAmount,
+      total: totalFixedCost + commissionAmount + withdrawalFeeAmount + cpaCost,
+    },
+    pricingStrategies,
+    recommendedShipping: shippingChannel || DEFAULT_SHIPPING_DATA[0],
+    shippingAlternatives: [],
+    warnings,
+    suggestions,
+    volumetricWeight,
+    chargeableWeight,
+    isVolumetric,
+    // 广告风控
+    adRiskControl: {
+      breakEvenACOS,
+      currentACOS,
+      isOverBudget,
+      cvrSensitivity,
+    },
+    // 智能提醒
+    smartAdvisor: {
+      commissionTierBoundary,
+      shippingWeightBoundary,
+    },
+  };
+}
+
+const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
+  { id: "1", name: "中国邮政挂号小包", thirdParty: "中国邮政", serviceTier: "Small", serviceLevel: "Economy", fixFee: 2, varFeePerGram: 0.063, pricePerKg: 65, pricePerCubic: 0, minWeight: 0, maxWeight: 2000, maxLength: 60, maxWidth: 60, maxHeight: 60, maxSumDimension: 150, deliveryTimeMin: 25, deliveryTimeMax: 35, deliveryTime: 30, maxValueRUB: 30000, maxValue: 2460, billingType: "实际重量", volumetricDivisor: 0, ozonRating: 0, batteryAllowed: false, liquidAllowed: false },
+];

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>佣金阶梯匹配测试</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #3b82f6;
+        }
+        input, select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            border-radius: 4px;
+        }
+        .error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background: #3b82f6;
+            color: white;
+        }
+        .highlight {
+            background: #fff3cd;
+            font-weight: bold;
+        }
+        #console {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 2px 0;
+        }
+        .log-success { color: #4caf50; }
+        .log-error { color: #f44336; }
+        .log-warning { color: #ff9800; }
+        .log-info { color: #2196f3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 佣金阶梯匹配测试工具</h1>
+        
+        <div class="test-section">
+            <h3>1. 测试佣金阶梯匹配</h3>
+            <p>输入卢布售价，查看匹配的佣金率：</p>
+            <input type="number" id="priceRUB" placeholder="卢布售价 (RUB)" value="1500" step="0.01">
+            <button onclick="testCommissionMatching()">测试匹配</button>
+            <div id="matchResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 批量测试（阶梯跳变点）</h3>
+            <button onclick="testBoundaryPrices()">测试边界值</button>
+            <div id="batchResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 查看当前佣金数据</h3>
+            <button onclick="showCommissionData()">显示佣金数据</button>
+            <div id="dataDisplay"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 实时计算器</h3>
+            <p>模拟实际计算流程：</p>
+            <input type="number" id="priceRMB" placeholder="人民币售价 (RMB)" value="123" step="0.01">
+            <input type="number" id="exchangeRate" placeholder="汇率 (RMB/RUB)" value="0.082" step="0.0001">
+            <button onclick="calculateRealtime()">实时计算</button>
+            <div id="realtimeResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div id="console">
+            <div class="log-entry">📋 控制台日志（打开浏览器开发者工具 F12 查看更详细日志）</div>
+        </div>
+    </div>
+
+    <script>
+        // 🔹 佣金阶梯定义（与后端保持一致）
+        const defaultTiers = [
+            { min: 0, max: 1500, rate: 12 },
+            { min: 1500.01, max: 5000, rate: 15 },
+            { min: 5000.01, max: Infinity, rate: 18 }
+        ];
+
+        // 🔹 获取佣金率函数
+        function getCommissionRate(priceRUB, tiers = defaultTiers) {
+            for (const tier of tiers) {
+                if (priceRUB >= tier.min && priceRUB <= tier.max) {
+                    return tier.rate;
+                }
+            }
+            return tiers[tiers.length - 1].rate;
+        }
+
+        // 🔹 日志输出函数
+        function log(message, type = 'info') {
+            const consoleDiv = document.getElementById('console');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            consoleDiv.appendChild(entry);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            
+            // 同时输出到浏览器控制台
+            if (type === 'error') console.error(message);
+            else if (type === 'warning') console.warn(message);
+            else console.log(message);
+        }
+
+        // 🔹 测试佣金匹配
+        function testCommissionMatching() {
+            const priceRUB = parseFloat(document.getElementById('priceRUB').value);
+            const commissionRate = getCommissionRate(priceRUB);
+            
+            const matchedTier = defaultTiers.find(tier => priceRUB >= tier.min && priceRUB <= tier.max);
+            
+            const resultDiv = document.getElementById('matchResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `
+                <p><strong>卢布售价:</strong> ${priceRUB.toFixed(2)} RUB</p>
+                <p><strong>匹配佣金率:</strong> ${commissionRate}%</p>
+                <p><strong>所属阶梯:</strong> ${matchedTier.min}-${matchedTier.max === Infinity ? '∞' : matchedTier.max} RUB</p>
+            `;
+            
+            log(`✓ 匹配成功: ${priceRUB} RUB → ${commissionRate}% (${matchedTier.min}-${matchedTier.max === Infinity ? '∞' : matchedTier.max} RUB)`, 'success');
+        }
+
+        // 🔹 测试边界值
+        function testBoundaryPrices() {
+            const testPrices = [100, 500, 1000, 1499.99, 1500, 1500.01, 3000, 5000, 5000.01, 10000];
+            
+            let html = '<table><thead><tr><th>卢布售价 (RUB)</th><th>佣金率 (%)</th><th>所属阶梯</th></tr></thead><tbody>';
+            
+            testPrices.forEach(price => {
+                const rate = getCommissionRate(price);
+                const tier = defaultTiers.find(t => price >= t.min && price <= t.max);
+                const isBoundary = price === 1500 || price === 1500.01 || price === 5000 || price === 5000.01;
+                
+                html += `<tr class="${isBoundary ? 'highlight' : ''}">
+                    <td>${price.toFixed(2)}</td>
+                    <td>${rate}%</td>
+                    <td>${tier.min}-${tier.max === Infinity ? '∞' : tier.max} RUB</td>
+                </tr>`;
+                
+                log(`  ${price} RUB → ${rate}%`, 'info');
+            });
+            
+            html += '</tbody></table>';
+            document.getElementById('batchResult').innerHTML = html;
+            log('✓ 边界值测试完成', 'success');
+        }
+
+        // 🔹 显示佣金数据
+        function showCommissionData() {
+            const savedData = localStorage.getItem('ozon_commission_data');
+            
+            if (!savedData) {
+                document.getElementById('dataDisplay').innerHTML = '<p style="color:red;">未找到缓存佣金数据，请先在主应用中上传佣金表。</p>';
+                log('❌ 未找到缓存数据', 'error');
+                return;
+            }
+            
+            const parsed = JSON.parse(savedData);
+            log(`✓ 找到 ${parsed.length} 条佣金数据`, 'success');
+            
+            let html = '<table><thead><tr><th>一级类目</th><th>二级类目</th><th>阶梯1 (0-1500)</th><th>阶梯2 (1500-5000)</th><th>阶梯3 (5000+)</th></tr></thead><tbody>';
+            
+            parsed.slice(0, 10).forEach(item => {
+                html += `<tr>
+                    <td>${item.primaryCategory}</td>
+                    <td>${item.secondaryCategory}</td>
+                    <td>${item.tiers[0].rate}%</td>
+                    <td>${item.tiers[1].rate}%</td>
+                    <td>${item.tiers[2].rate}%</td>
+                </tr>`;
+                
+                log(`  ${item.primaryCategory} > ${item.secondaryCategory}: [${item.tiers[0].rate}%, ${item.tiers[1].rate}%, ${item.tiers[2].rate}%]`, 'info');
+            });
+            
+            if (parsed.length > 10) {
+                html += `<tr><td colspan="5" style="text-align:center;color:#666;">... 还有 ${parsed.length - 10} 条数据</td></tr>`;
+            }
+            
+            html += '</tbody></table>';
+            document.getElementById('dataDisplay').innerHTML = html;
+            
+            // 🔹 检查阶梯是否都相同
+            const allSameRate = parsed.every(item => 
+                item.tiers[0].rate === item.tiers[1].rate && 
+                item.tiers[1].rate === item.tiers[2].rate
+            );
+            
+            if (allSameRate) {
+                log('⚠️ 警告: 所有阶梯费率相同，可能数据加载有问题！', 'warning');
+            } else {
+                log('✓ 阶梯费率存在差异，数据正常', 'success');
+            }
+        }
+
+        // 🔹 实时计算
+        function calculateRealtime() {
+            const priceRMB = parseFloat(document.getElementById('priceRMB').value);
+            const exchangeRate = parseFloat(document.getElementById('exchangeRate').value);
+            const priceRUB = priceRMB / exchangeRate;
+            const commissionRate = getCommissionRate(priceRUB);
+            const commissionAmount = priceRMB * (commissionRate / 100);
+            
+            const resultDiv = document.getElementById('realtimeResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `
+                <p><strong>人民币售价:</strong> ${priceRMB.toFixed(2)} RMB</p>
+                <p><strong>卢布售价:</strong> ${priceRUB.toFixed(2)} RUB</p>
+                <p><strong>佣金率:</strong> ${commissionRate}%</p>
+                <p><strong>佣金金额:</strong> ${commissionAmount.toFixed(2)} RMB</p>
+            `;
+            
+            log(`💰 计算: ${priceRMB} RMB = ${priceRUB.toFixed(2)} RUB → ${commissionRate}% (¥${commissionAmount.toFixed(2)})`, 'success');
+        }
+
+        // 页面加载时自动显示佣金数据
+        window.onload = function() {
+            log('🚀 佣金阶梯匹配测试工具已加载', 'info');
+            showCommissionData();
+        };
+    </script>
+</body>
+</html>
