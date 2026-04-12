@@ -46,7 +46,8 @@ interface DataHubContextType {
     priceRUB: number,
     exchangeRate: number,
     hasBattery?: boolean,
-    hasLiquid?: boolean
+    hasLiquid?: boolean,
+    designatedProvider?: string
   ) => { available: ShippingChannel[]; unavailable: (ShippingChannel & { reason: string })[] };
 }
 
@@ -969,7 +970,8 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
       priceRUB: number,
       exchangeRate: number,
       hasBattery: boolean = false, // 🔹 是否带电
-      hasLiquid: boolean = false // 🔹 是否带液体
+      hasLiquid: boolean = false, // 🔹 是否带液体
+      designatedProvider: string = "" // 🔹 指定物流商过滤
     ) => {
       const priceRMB = priceRUB * exchangeRate;
       const sumDim = length + width + height;
@@ -979,6 +981,12 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
 
       shippingData.forEach((channel) => {
         const reasons: string[] = [];
+        
+        // 🔹 预过滤：指定物流商
+        if (designatedProvider && channel.thirdParty !== designatedProvider) {
+          unavailable.push({ ...channel, reason: `指定物流商过滤: 仅显示 ${designatedProvider}` });
+          return;
+        }
         
         // 🔹 属性硬拦截：电池
         if (hasBattery && !channel.batteryAllowed) {
@@ -1018,10 +1026,12 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      // 按运费升序排列
+      // 按运费升序排列（使用体积重计算）
+      // 注意：当传入 length/width/height/actualWeight 时，calculateShippingCost 会自动计算计费重
+      // 此时第二个参数 chargeableWeight 会被忽略
       available.sort((a, b) => {
-        const costA = calculateShippingCost(a, weight);
-        const costB = calculateShippingCost(b, weight);
+        const costA = calculateShippingCost(a, 0, length, width, height, weight);
+        const costB = calculateShippingCost(b, 0, length, width, height, weight);
         return costA - costB;
       });
 
@@ -1062,9 +1072,177 @@ export function useDataHub() {
 }
 
 /**
- * 计算物流费用（RMB）
- * 支持 Ozon 真实费率格式: fixFee + varFeePerGram × 重量(g)
+ * 计算体积重 (g)
+ * 公式: L × W × H / divisor × 1000
+ * @param length 长度 (cm)
+ * @param width 宽度 (cm)
+ * @param height 高度 (cm)
+ * @param divisor 除数（默认12000）
  */
-export function calculateShippingCost(channel: ShippingChannel, weight: number): number {
-  return channel.fixFee + channel.varFeePerGram * weight;
+function calculateChannelVolumetricWeight(
+  length: number,
+  width: number,
+  height: number,
+  divisor: number = 12000
+): number {
+  return ((length * width * height) / divisor) * 1000;
+}
+
+/**
+ * 解析物流渠道的体积重除数
+ * 从 volumetricDivisor 字段获取，或从 billingType 解析除数
+ */
+function parseVolumetricDivisor(channel: ShippingChannel): number {
+  // 如果 channel 有 volumetricDivisor 字段，直接使用
+  if (channel.volumetricDivisor && channel.volumetricDivisor > 0) {
+    return channel.volumetricDivisor;
+  }
+  
+  // 否则尝试从 billingType 解析除数
+  const billingType = channel.billingType || "";
+  
+  // 常见除数模式匹配
+  const divisorPatterns = [
+    /\/(\d+)/,           // /12000, /6000, /5000
+    /(\d{4,5})/,        // 12000, 6000, 5000
+  ];
+  
+  for (const pattern of divisorPatterns) {
+    const match = billingType.match(pattern);
+    if (match) {
+      const divisor = parseInt(match[1]);
+      if (divisor >= 1000 && divisor <= 20000) {
+        return divisor;
+      }
+    }
+  }
+  
+  // 默认值
+  return 12000;
+}
+
+/**
+ * 解析计费类型并计算计费重量
+ * 
+ * @returns 包含以下信息:
+ * - billingWeight: 计费重量 (g)
+ * - actualWeight: 实际重量 (g)
+ * - volumetricWeight: 体积重 (g)
+ * - isVolumetric: 是否按体积重计费
+ * - divisor: 体积重除数
+ * - billingType: 计费类型描述
+ */
+export function parseBillingWeight(
+  channel: ShippingChannel,
+  length: number,
+  width: number,
+  height: number,
+  actualWeight: number
+): {
+  billingWeight: number;
+  actualWeight: number;
+  volumetricWeight: number;
+  isVolumetric: boolean;
+  divisor: number;
+  billingType: string;
+} {
+  const billingTypeRaw = channel.billingType || "实际重量";
+  const divisor = parseVolumetricDivisor(channel);
+  
+  // 计算体积重
+  const volumetricWeight = calculateChannelVolumetricWeight(length, width, height, divisor);
+  
+  // 根据计费类型确定计费重量
+  // 优先级: 最大/取大 > 体积 > 实际
+  let billingWeight: number;
+  let isVolumetric: boolean;
+  let billingTypeDesc: string;
+  
+  const normalizedBillingType = billingTypeRaw.toLowerCase();
+  
+  if (
+    normalizedBillingType.includes("最大") || 
+    normalizedBillingType.includes("取大") ||
+    normalizedBillingType.includes("max")
+  ) {
+    // 最大/取大: 取实重和体积重的最大值
+    billingWeight = Math.max(actualWeight, volumetricWeight);
+    isVolumetric = volumetricWeight > actualWeight;
+    billingTypeDesc = "取大";
+  } else if (
+    normalizedBillingType.includes("体积") && 
+    !normalizedBillingType.includes("实际") &&
+    !normalizedBillingType.includes("实际")
+  ) {
+    // 纯体积: 只按体积重计费
+    billingWeight = volumetricWeight;
+    isVolumetric = true;
+    billingTypeDesc = "体积重";
+  } else if (
+    normalizedBillingType.includes("实际") &&
+    !normalizedBillingType.includes("最大") &&
+    !normalizedBillingType.includes("取大")
+  ) {
+    // 纯实际: 只按实际重量计费
+    billingWeight = actualWeight;
+    isVolumetric = false;
+    billingTypeDesc = "实际重";
+  } else {
+    // 默认行为: 取大
+    billingWeight = Math.max(actualWeight, volumetricWeight);
+    isVolumetric = volumetricWeight > actualWeight;
+    billingTypeDesc = "取大";
+  }
+  
+  return {
+    billingWeight,
+    actualWeight,
+    volumetricWeight,
+    isVolumetric,
+    divisor,
+    billingType: billingTypeDesc,
+  };
+}
+
+/**
+ * 获取计费模式描述
+ */
+export function getBillingModeDescription(channel: ShippingChannel): string {
+  const billingTypeRaw = channel.billingType || "实际重量";
+  const normalizedBillingType = billingTypeRaw.toLowerCase();
+  
+  if (normalizedBillingType.includes("最大") || normalizedBillingType.includes("取大")) {
+    return "取大";
+  } else if (normalizedBillingType.includes("体积") && !normalizedBillingType.includes("实际")) {
+    return "体积重";
+  } else if (normalizedBillingType.includes("实际")) {
+    return "实际重";
+  }
+  
+  return "取大";
+}
+
+/**
+ * 计算物流费用（RMB）
+ * 支持 Ozon 真实费率格式: fixFee + varFeePerGram × 计费重量(g)
+ * 
+ * @param channel 物流渠道
+ * @param chargeableWeight 计费重量 (g) - 由调用方根据计费类型计算
+ */
+export function calculateShippingCost(
+  channel: ShippingChannel, 
+  chargeableWeight: number,
+  length?: number,
+  width?: number,
+  height?: number,
+  actualWeight?: number
+): number {
+  // 如果提供了尺寸和实际重量，说明调用方需要体积重计算
+  if (length !== undefined && width !== undefined && height !== undefined && actualWeight !== undefined) {
+    const { billingWeight } = parseBillingWeight(channel, length, width, height, actualWeight);
+    return channel.fixFee + channel.varFeePerGram * billingWeight;
+  }
+  
+  // 兼容旧调用方式：直接使用传入的重量作为计费重量
+  return channel.fixFee + channel.varFeePerGram * chargeableWeight;
 }

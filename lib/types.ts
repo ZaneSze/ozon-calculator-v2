@@ -52,6 +52,7 @@ export interface CalculationInput {
   weight: number; // g
   hasBattery: boolean; // 🔹 是否带电
   hasLiquid: boolean; // 🔹 是否带液体
+  designatedProvider: string; // 🔹 指定物流商，为空表示全部
   
   // 成本参数
   purchaseCost: number; // RMB

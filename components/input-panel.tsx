@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Package, Truck, Megaphone, Tag, AlertTriangle, RotateCcw, Battery, Droplets, CheckCircle2 } from "lucide-react";
+import { Package, Truck, Megaphone, Tag, AlertTriangle, RotateCcw, Battery, Droplets, CheckCircle2, DollarSign } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -19,9 +19,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { useDataHub } from "@/lib/data-hub-context";
 import { CalculationInput, ShippingChannel } from "@/lib/types";
-import { calculateVolumetricWeight } from "@/lib/calculator";
+
+// 🔹 计费信息类型（用于计抛预警同步）
+interface BillingInfo {
+  mode: string;
+  billingWeight: number;
+  actualWeight: number;
+  volumetricWeight: number;
+  isVolumetric: boolean;
+  divisor: number;
+}
 
 interface InputPanelProps {
   input: CalculationInput;
@@ -45,9 +55,11 @@ interface InputPanelProps {
   };
   // 🔹 物流数据（用于检测功能依赖）
   shippingData?: ShippingChannel[];
+  // 🔹 选中的物流渠道计费信息（用于计抛预警同步）
+  selectedBillingInfo?: BillingInfo | null;
 }
 
-export function InputPanel({ input, onInputChange, currentProfitMargin, onReversePriceFromMargin, marginError, onReset, adRiskControl, shippingData = [] }: InputPanelProps) {
+export function InputPanel({ input, onInputChange, currentProfitMargin, onReversePriceFromMargin, marginError, onReset, adRiskControl, shippingData = [], selectedBillingInfo }: InputPanelProps) {
   const { getCategories } = useDataHub();
   const categories = useMemo(() => getCategories(), [getCategories]);
   
@@ -86,14 +98,19 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
       setTargetMarginInput(currentProfitMargin.toFixed(1));
     }
   }, [currentProfitMargin]);
+  
+  // 🔹 计抛预警逻辑
+  // 仅当：1) 选中的渠道支持计抛 2) 计费重 > 实重 时显示
+  const isVolumetricWarning = selectedBillingInfo?.isVolumetric === true;
+  const volWarningActive = isVolumetricWarning && (selectedBillingInfo?.billingWeight || 0) > (selectedBillingInfo?.actualWeight || 0);
+  const billingWeight = selectedBillingInfo?.billingWeight || 0;
+  const actualWeight = selectedBillingInfo?.actualWeight || input.weight;
+  const volumetricWeight = selectedBillingInfo?.volumetricWeight || 0;
+  const divisor = selectedBillingInfo?.divisor || 12000;
 
   const updateField = <K extends keyof CalculationInput>(key: K, value: CalculationInput[K]) => {
     onInputChange({ ...input, [key]: value });
   };
-
-  // 体积重警告
-  const volumetricWeight = calculateVolumetricWeight(input.length, input.width, input.height);
-  const isVolumetricWarning = volumetricWeight > input.weight && input.weight > 0;
 
   // 当一级类目改变时，重置二级类目
   const handlePrimaryCategoryChange = (primary: string) => {
@@ -119,6 +136,69 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
           </button>
         </div>
       )}
+      
+      {/* 🔹 模块 0：汇率与结算设置 - 严禁删除！ */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            汇率与结算设置
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/* 卢布汇率 + 提现费 */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5 col-span-2">
+              <Label className="text-xs">卢布汇率 (1 RUB = X RMB)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.0001"
+                value={input.exchangeRate || ""}
+                onChange={(e) => updateField("exchangeRate", parseFloat(e.target.value) || 0)}
+                className="h-9 text-sm"
+                placeholder="0.082"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">提现手续费 (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.1"
+                value={input.withdrawalFee || ""}
+                onChange={(e) => updateField("withdrawalFee", parseFloat(e.target.value) || 0)}
+                className="h-9 text-sm"
+                placeholder="1.5%"
+              />
+            </div>
+          </div>
+          {/* 汇率安全垫 */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">汇率安全垫</Label>
+              <span className="text-xs text-muted-foreground">{input.exchangeRateBuffer}%</span>
+            </div>
+            <Slider
+              value={[input.exchangeRateBuffer || 0]}
+              onValueChange={(v) => updateField("exchangeRateBuffer", v[0])}
+              max={20}
+              step={0.5}
+              className="w-full"
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span>0%</span>
+              <span>10%</span>
+              <span>20%</span>
+            </div>
+            {input.exchangeRateBuffer > 0 && (
+              <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
+                实际汇率: 1 RUB = {(input.exchangeRate * (1 - input.exchangeRateBuffer / 100)).toFixed(4)} RMB
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
       
       {/* 模块 A：商品参数与物流拦截 */}
       <Card>
@@ -213,10 +293,36 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
               onChange={(e) => updateField("weight", parseFloat(e.target.value) || 0)}
               className="h-9 text-sm"
             />
-            {isVolumetricWarning && (
-              <div className="flex items-center gap-1.5 text-xs text-red-700 font-medium p-2 rounded-md bg-red-50 border border-red-200">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                泡货预警：按体积重 ({volumetricWeight.toFixed(0)}g) 计费
+            {/* 🔹 计抛预警：仅在 isVolumetric && billingWeight > actualWeight 时显示 */}
+            {volWarningActive && selectedBillingInfo && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-purple-50 border-2 border-purple-300 animate-pulse">
+                <AlertTriangle className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-purple-700">
+                    ⚠️ 计抛预警
+                  </div>
+                  <div className="text-[11px] text-purple-600 mt-0.5">
+                    当前尺寸触发计抛：<br/>
+                    抛重 <span className="font-bold">{selectedBillingInfo.volumetricWeight.toFixed(0)}g</span> 
+                    &gt; 实重 <span className="font-bold">{selectedBillingInfo.actualWeight.toFixed(0)}g</span><br/>
+                    计费重已更新为 <span className="font-bold">{selectedBillingInfo.billingWeight.toFixed(0)}g</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1">
+                    计算：{input.length}×{input.width}×{input.height} / {divisor} × 1000 = {selectedBillingInfo.volumetricWeight.toFixed(0)}g
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 非泡货时的静默提示 - 仅当有选中渠道且重量>0时显示 */}
+            {!volWarningActive && input.weight > 0 && selectedBillingInfo && (
+              <div className="text-[10px] text-slate-400">
+                抛重 <span className="font-medium">{selectedBillingInfo.volumetricWeight.toFixed(0)}g</span> ≤ 实重 <span className="font-medium">{selectedBillingInfo.actualWeight.toFixed(0)}g</span>，按实重计费
+              </div>
+            )}
+            {/* 未选中渠道时的默认提示 */}
+            {!selectedBillingInfo && input.weight > 0 && (
+              <div className="text-[10px] text-slate-400">
+                抛重 <span className="font-medium">{(input.length * input.width * input.height / 12000 * 1000).toFixed(0)}g</span> ≤ 实重 <span className="font-medium">{input.weight}g</span>
               </div>
             )}
           </div>

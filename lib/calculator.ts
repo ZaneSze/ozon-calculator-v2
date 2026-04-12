@@ -22,7 +22,7 @@
  */
 
 import { CalculationInput, CalculationResult, CategoryCommission, ShippingChannel } from "./types";
-import { calculateShippingCost } from "./data-hub-context";
+import { calculateShippingCost, parseBillingWeight } from "./data-hub-context";
 
 // 佣金阶梯边界常量（RUB）
 const TIER_BOUNDARIES = [
@@ -61,25 +61,52 @@ export function getCommissionRate(
 
 /**
  * 计算体积重 (g)
- * 公式：长×宽×高 / 12000 (单位: cm, 结果: g)
+ * 公式：长×宽×高 / divisor × 1000 (单位: cm, 结果: g)
+ * 
+ * @param length 长度 (cm)
+ * @param width 宽度 (cm)
+ * @param height 高度 (cm)
+ * @param divisor 除数（默认12000，常用值：12000, 6000, 5000）
  */
 export function calculateVolumetricWeight(
   length: number,
   width: number,
-  height: number
+  height: number,
+  divisor: number = 12000
 ): number {
-  return (length * width * height) / 12000;
+  return ((length * width * height) / divisor) * 1000;
 }
 
 /**
  * 获取计费重量 (g)
+ * 
+ * 如果提供了 shippingChannel，则使用 parseBillingWeight 正确计算计费类型（取大/体积重/实际重）
+ * 否则回退到简化的取大逻辑（仅支持除数12000）
+ * 
+ * @param length 长度 (cm)
+ * @param width 宽度 (cm)
+ * @param height 高度 (cm)
+ * @param actualWeight 实际重量 (g)
+ * @param shippingChannel 可选的物流渠道（用于获取正确的除数和计费类型）
  */
 export function getChargeableWeight(
   length: number,
   width: number,
   height: number,
-  actualWeight: number
+  actualWeight: number,
+  shippingChannel?: ShippingChannel
 ): { volumetric: number; chargeable: number; isVolumetric: boolean } {
+  // 如果提供了物流渠道，使用 parseBillingWeight 获取正确的计费逻辑
+  if (shippingChannel) {
+    const result = parseBillingWeight(shippingChannel, length, width, height, actualWeight);
+    return {
+      volumetric: result.volumetricWeight,
+      chargeable: result.billingWeight,
+      isVolumetric: result.isVolumetric,
+    };
+  }
+  
+  // 兼容旧调用方式：使用默认除数12000，简单取大
   const volumetric = calculateVolumetricWeight(length, width, height);
   const chargeable = Math.max(volumetric, actualWeight);
   return {
@@ -211,8 +238,8 @@ export function reversePriceFromMargin(
   const packagingFee = input.packagingFee;
   const cpcCost = calculateCpcCost(input.cpcEnabled, input.cpcBid, input.cpcConversionRate, input.exchangeRate);
   
-  // 体积重
-  const { chargeable: chargeableWeight } = getChargeableWeight(input.length, input.width, input.height, input.weight);
+  // 体积重（使用渠道的除数和计费类型）
+  const { chargeable: chargeableWeight } = getChargeableWeight(input.length, input.width, input.height, input.weight, shippingChannel);
   const baseShippingCost = shippingChannel ? calculateShippingCost(shippingChannel, chargeableWeight) : 0;
   
   // 退货成本（需要国际运费）
@@ -362,8 +389,8 @@ export function calculateSixTierPricing(
   const domesticShipping = input.domesticShipping;
   const packagingFee = input.packagingFee;
   
-  // 体积重
-  const { chargeable } = getChargeableWeight(input.length, input.width, input.height, input.weight);
+  // 体积重（使用渠道的除数和计费类型）
+  const { chargeable } = getChargeableWeight(input.length, input.width, input.height, input.weight, shippingChannel);
   const internationalShipping = shippingChannel ? calculateShippingCost(shippingChannel, chargeable) : 0;
   
   // 退货成本
@@ -746,7 +773,7 @@ export function calculateMultiItemProfit(
   shippingChannel: ShippingChannel,
   commission: CategoryCommission
 ): { profitPerItem: number; totalProfit: number; profitMargin: number } {
-  const chargeableWeight = getChargeableWeight(input.length, input.width, input.height, input.weight).chargeable;
+  const chargeableWeight = getChargeableWeight(input.length, input.width, input.height, input.weight, shippingChannel).chargeable;
   const singleShippingCost = calculateShippingCost(shippingChannel, chargeableWeight);
   const totalWeight = chargeableWeight * itemCount;
   const totalShippingCost = calculateShippingCost(shippingChannel, totalWeight);
@@ -1129,9 +1156,9 @@ export function performFullCalculation(
   const warnings: string[] = [];
   const suggestions: string[] = [];
 
-  // 体积重计算
+  // 体积重计算（使用渠道的除数和计费类型）
   const { volumetric: volumetricWeight, chargeable: chargeableWeight, isVolumetric } =
-    getChargeableWeight(input.length, input.width, input.height, input.weight);
+    getChargeableWeight(input.length, input.width, input.height, input.weight, shippingChannel);
 
   if (isVolumetric) {
     warnings.push(`泡货预警：当前将按体积重 (${chargeableWeight.toFixed(0)} g) 计费，建议优化包装尺寸。`);

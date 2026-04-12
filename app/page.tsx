@@ -1,10 +1,20 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Header } from "@/components/header";
 import { InputPanel } from "@/components/input-panel";
 import { Dashboard } from "@/components/dashboard";
 import { useDataHub } from "@/lib/data-hub-context";
+import { RotateCcw, Truck, Upload, Database, ChevronDown, FileText, Star, Download, Settings, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CalculationInput, ShippingChannel } from "@/lib/types";
 import {
   performFullCalculation,
@@ -15,7 +25,9 @@ import {
   reversePriceFromMargin,
   calculateSixTierPricing,
 } from "@/lib/calculator";
-import { calculateShippingCost } from "@/lib/data-hub-context";
+import { calculateShippingCost, parseBillingWeight, getBillingModeDescription } from "@/lib/data-hub-context";
+import { PreviewMappingDialog } from "@/components/preview-mapping-dialog";
+import { FieldMapping, ParsedData, smartParseCSV } from "@/lib/smart-parser";
 
 // 默认输入：售价为 RMB（1500 RUB × 0.082 = 123 RMB）
 const DEFAULT_INPUT: CalculationInput = {
@@ -27,6 +39,7 @@ const DEFAULT_INPUT: CalculationInput = {
   weight: 300,
   hasBattery: false, // 🔹 是否带电，默认否
   hasLiquid: false, // 🔹 是否带液体，默认否
+  designatedProvider: "", // 🔹 指定物流商，为空表示全部
   purchaseCost: 30,
   domesticShipping: 3,
   packagingFee: 2,
@@ -51,13 +64,121 @@ const DEFAULT_INPUT: CalculationInput = {
 
 // localStorage 键名
 const STORAGE_KEY = "ozon-calculator-input";
+const CONFIG_EXPORT_KEY = "ozon-calculator-config";
+
+// 🔹 工具函数：渲染 Ozon 星级评分
+function renderOzonRating(rating: number) {
+  if (!rating || rating <= 0) return null;
+  const fullStars = Math.floor(rating);
+  const hasHalfStar = rating % 1 >= 0.5;
+  return (
+    <div className="flex items-center gap-0.5">
+      {[...Array(5)].map((_, i) => (
+        <Star
+          key={i}
+          className={`h-3 w-3 ${i < fullStars ? "fill-amber-400 text-amber-400" : i === fullStars && hasHalfStar ? "fill-amber-400/50 text-amber-400" : "text-gray-300"}`}
+        />
+      ))}
+      <span className="text-[10px] text-amber-600 ml-0.5">{rating.toFixed(1)}</span>
+    </div>
+  );
+}
+
+// 🔹 工具函数：检查渠道是否支持体积重计费
+function supportsVolumetricBilling(channel: ShippingChannel): boolean {
+  const billingType = (channel.billingType || "").toLowerCase();
+  return billingType.includes("体积") || billingType.includes("取大") || billingType.includes("max");
+}
+
+// 🔹 工具函数：下载模板 CSV
+function downloadTemplate(type: "commission" | "shipping") {
+  if (type === "shipping") {
+    const template = `配送方式,第三方物流,服务等级,固定费(RMB),续重费(RMB/g),最小重量(g),最大重量(g),最大长度(cm),最大宽度(cm),最大高度(cm),边长总和(cm),时效(天),计费类型,体积重除数
+中国邮政小包,邮政,Economy,2.00,0.063,0,2000,60,60,60,150,25-35,取大,12000
+顺丰国际,顺丰,Express,5.00,0.080,0,3000,60,60,60,120,10-15,取大,8000`;
+    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ozon_shipping_template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  } else {
+    const template = `一级类目,二级类目,rfbs -> 0 - 1500 -> тариф, %,rfbs -> 1500.01 - 5000 -> тариф, %,rfbs -> 5000.01+ -> тариф, %
+电子产品,手机配件,12,15,18
+电子产品,充电器,12,15,18`;
+    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ozon_commission_template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+}
+
+// 🔹 工具函数：导出配置
+function exportConfig() {
+  const config = {
+    version: "1.0",
+    timestamp: new Date().toISOString(),
+    input: localStorage.getItem(STORAGE_KEY),
+    columnMappings: {
+      commission: localStorage.getItem("ozon_commission_mappings"),
+      shipping: localStorage.getItem("ozon_shipping_mappings"),
+    },
+    exchangeRate: localStorage.getItem("ozon_exchange_rate"),
+    withdrawalFee: localStorage.getItem("ozon_withdrawal_fee"),
+  };
+  const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `ozon_config_${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+// 🔹 工具函数：导入配置
+function importConfig(onSuccess: () => void, onError: (err: string) => void) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.onchange = async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const config = JSON.parse(text);
+      if (!config.version) throw new Error("无效的配置文件");
+      if (config.input) localStorage.setItem(STORAGE_KEY, config.input);
+      if (config.columnMappings?.commission) localStorage.setItem("ozon_commission_mappings", config.columnMappings.commission);
+      if (config.columnMappings?.shipping) localStorage.setItem("ozon_shipping_mappings", config.columnMappings.shipping);
+      if (config.exchangeRate) localStorage.setItem("ozon_exchange_rate", config.exchangeRate);
+      if (config.withdrawalFee) localStorage.setItem("ozon_withdrawal_fee", config.withdrawalFee);
+      onSuccess();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "导入失败");
+    }
+  };
+  input.click();
+}
 
 export default function Home() {
-  const { getCommissionByCategory, getShippingChannels, shippingData, clearCommissionData, clearShippingData } = useDataHub();
+  const { getCommissionByCategory, getShippingChannels, shippingData, clearCommissionData, clearShippingData, loadCommissionData, loadShippingData } = useDataHub();
   const [input, setInput] = useState<CalculationInput>(DEFAULT_INPUT);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [marginError, setMarginError] = useState<string | null>(null);
   const [lockedChannelId, setLockedChannelId] = useState<string | null>(null); // 🔹 物流商锁定状态
+  const [dataManagementOpen, setDataManagementOpen] = useState(false); // 🔹 数据管理抽屉状态
+  const [commissionFileName, setCommissionFileName] = useState<string>("");
+  const [shippingFileName, setShippingFileName] = useState<string>("");
+  
+  // 🔹 CSV 映射弹窗状态
+  const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
+  const [mappingDataType, setMappingDataType] = useState<"commission" | "shipping">("shipping");
+  const [pendingMappingFile, setPendingMappingFile] = useState<File | null>(null);
+  const [parsedCsvData, setParsedCsvData] = useState<ParsedData | null>(null);
   
   // 防抖保存的定时器
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -138,9 +259,10 @@ export default function Home() {
       priceRUB,
       effectiveExchangeRate,
       input.hasBattery, // 🔹 传入是否带电
-      input.hasLiquid // 🔹 传入是否带液体
+      input.hasLiquid, // 🔹 传入是否带液体
+      input.designatedProvider // 🔹 传入指定物流商
     );
-  }, [getShippingChannels, input.length, input.width, input.height, input.weight, input.targetPriceRMB, effectiveExchangeRate, input.hasBattery, input.hasLiquid]);
+  }, [getShippingChannels, input.length, input.width, input.height, input.weight, input.targetPriceRMB, effectiveExchangeRate, input.hasBattery, input.hasLiquid, input.designatedProvider]);
 
   // 默认选中价格最优渠道（如果已锁定，则使用锁定的渠道）
   const selectedChannel = useMemo(() => {
@@ -204,7 +326,7 @@ export default function Home() {
 
   // 计算总固定成本
   const computeTotalFixedCost = useCallback(() => {
-    const chargeableWeight = getChargeableWeight(effectiveInput.length, effectiveInput.width, effectiveInput.height, effectiveInput.weight).chargeable;
+    const chargeableWeight = getChargeableWeight(effectiveInput.length, effectiveInput.width, effectiveInput.height, effectiveInput.weight, selectedChannel || undefined).chargeable;
     const internationalShipping = selectedChannel ? calculateShippingCost(selectedChannel, chargeableWeight) : 0;
     const rate = effectiveInput.returnRate / 100;
     const returnCost = (() => {
@@ -347,22 +469,212 @@ export default function Home() {
     
   }, [clearCommissionData, clearShippingData]);
 
+  // 🔹 佣金表上传处理
+  const handleCommissionFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setCommissionFileName(file.name);
+    
+    try {
+      // 读取文件并解析
+      const content = await file.text();
+      const parsed = smartParseCSV(content, "commission");
+      setParsedCsvData(parsed);
+      setMappingDataType("commission");
+      setPendingMappingFile(file);
+      setMappingDialogOpen(true);
+      console.log("佣金表解析完成，待确认映射:", file.name);
+    } catch (err) {
+      console.error("解析佣金表失败:", err);
+      // 回退到直接加载
+      try {
+        await loadCommissionData(file, "overwrite");
+        console.log("佣金表上传成功:", file.name);
+      } catch (loadErr) {
+        console.error("上传佣金表失败:", loadErr);
+      }
+    }
+  }, [loadCommissionData]);
+
+  // 🔹 物流表上传处理
+  const handleShippingFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setShippingFileName(file.name);
+    
+    try {
+      // 读取文件并解析
+      const content = await file.text();
+      const parsed = smartParseCSV(content, "shipping");
+      setParsedCsvData(parsed);
+      setMappingDataType("shipping");
+      setPendingMappingFile(file);
+      setMappingDialogOpen(true);
+      console.log("物流表解析完成，待确认映射:", file.name);
+    } catch (err) {
+      console.error("解析物流表失败:", err);
+      // 回退到直接加载
+      try {
+        await loadShippingData(file, "overwrite");
+        console.log("物流表上传成功:", file.name);
+      } catch (loadErr) {
+        console.error("上传物流表失败:", loadErr);
+      }
+    }
+  }, [loadShippingData]);
+  
+  // 🔹 映射确认处理
+  const handleMappingConfirm = useCallback(async (mappings: FieldMapping[]) => {
+    console.log("映射已确认:", mappings);
+    setMappingDialogOpen(false);
+    
+    if (pendingMappingFile) {
+      try {
+        if (mappingDataType === "commission") {
+          await loadCommissionData(pendingMappingFile, "overwrite");
+          console.log("佣金表上传成功");
+        } else {
+          await loadShippingData(pendingMappingFile, "overwrite");
+          console.log("物流表上传成功");
+        }
+      } catch (err) {
+        console.error("上传数据失败:", err);
+      }
+    }
+    
+    setPendingMappingFile(null);
+    setParsedCsvData(null);
+  }, [pendingMappingFile, mappingDataType, loadCommissionData, loadShippingData]);
+  
+  // 🔹 映射取消处理
+  const handleMappingCancel = useCallback(() => {
+    setMappingDialogOpen(false);
+    setPendingMappingFile(null);
+    setParsedCsvData(null);
+  }, []);
+
+  // 计算卢布售价
+  const priceRUB = input.exchangeRate > 0 ? input.targetPriceRMB / input.exchangeRate : 0;
+
+  // 🔹 预计算所有渠道运费（使用体积重计算）
+  const channelCosts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const ch of [...shippingChannels.available, ...shippingChannels.unavailable]) {
+      // 传入尺寸和实际重量，让 calculateShippingCost 自动计算体积重
+      map.set(ch.id, calculateShippingCost(ch, input.weight, input.length, input.width, input.height, input.weight));
+    }
+    return map;
+  }, [shippingChannels.available, shippingChannels.unavailable, input.weight, input.length, input.width, input.height]);
+
+  // 🔹 预计算所有渠道的计费模式信息
+  const channelBillingInfo = useMemo(() => {
+    const map = new Map<string, { 
+      mode: string; 
+      billingWeight: number; 
+      actualWeight: number; 
+      volumetricWeight: number; 
+      isVolumetric: boolean; 
+      divisor: number;
+    }>();
+    for (const ch of [...shippingChannels.available, ...shippingChannels.unavailable]) {
+      const info = parseBillingWeight(ch, input.length, input.width, input.height, input.weight);
+      map.set(ch.id, {
+        mode: getBillingModeDescription(ch),
+        billingWeight: info.billingWeight,
+        actualWeight: info.actualWeight,
+        volumetricWeight: info.volumetricWeight,
+        isVolumetric: info.isVolumetric,
+        divisor: info.divisor,
+      });
+    }
+    return map;
+  }, [shippingChannels.available, shippingChannels.unavailable, input.weight, input.length, input.width, input.height]);
+  
+  // 🔹 当前选中渠道的计费信息（用于输入面板计抛预警同步）
+  const selectedBillingInfo = useMemo(() => {
+    if (!selectedChannel) return null;
+    return channelBillingInfo.get(selectedChannel.id) || null;
+  }, [selectedChannel, channelBillingInfo]);
+
   return (
-    <div className="min-h-screen bg-background">
-      <Header
-        exchangeRate={input.exchangeRate}
-        onExchangeRateChange={handleExchangeRateChange}
-        withdrawalFee={input.withdrawalFee}
-        onWithdrawalFeeChange={handleWithdrawalFeeChange}
-        exchangeRateBuffer={input.exchangeRateBuffer}
-        onExchangeRateBufferChange={handleExchangeRateBufferChange}
-        input={input}
-        onInputChange={handleInputChange}
-      />
-      <main className="container mx-auto px-4 py-6">
-        <div className="flex gap-6">
-          {/* 左侧输入区 40% */}
-          <div className="w-[40%] shrink-0">
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* 🔹 吸顶结果栏 - 毛玻璃金融风格 */}
+      <header className="sticky top-0 z-50 w-full bg-gradient-to-b from-white/90 to-white/70 backdrop-blur-md shadow-md border-b border-slate-200/50">
+        <div className="w-full px-4 py-2">
+          <div className="flex items-center justify-between gap-4">
+            {/* 左侧：标题 */}
+            <div className="flex items-center gap-3 shrink-0 max-w-[120px]">
+              <span className="text-base font-bold text-slate-800">📊 Ozon精算</span>
+            </div>
+            
+            {/* 中间：5个核心指标 - 全部使用 shrink-0 */}
+            <div className="flex-1 flex items-center justify-center gap-4 overflow-hidden">
+              <div className="flex flex-col items-center shrink-0">
+                <span className="text-[10px] text-slate-500 font-medium">净利</span>
+                <span className={`text-sm font-bold whitespace-nowrap ${result.netProfit >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                  {result.netProfit >= 0 ? "+" : ""}¥{result.netProfit.toFixed(1)}
+                </span>
+              </div>
+              
+              <div className="flex flex-col items-center shrink-0">
+                <span className="text-[10px] text-slate-500 font-medium">ROI</span>
+                <span className={`text-sm font-bold whitespace-nowrap ${result.roi >= 0 ? "text-blue-600" : "text-red-500"}`}>
+                  {result.roi >= 0 ? "+" : ""}{result.roi.toFixed(1)}%
+                </span>
+              </div>
+              
+              <div className="flex flex-col items-center shrink-0">
+                <span className="text-[10px] text-slate-500 font-medium">利润率</span>
+                <span className={`text-sm font-bold whitespace-nowrap ${result.profitMargin >= 0 ? "text-amber-600" : "text-red-500"}`}>
+                  {result.profitMargin >= 0 ? "+" : ""}{result.profitMargin.toFixed(1)}%
+                </span>
+              </div>
+              
+              <div className="flex flex-col items-center shrink-0">
+                <span className="text-[10px] text-slate-500 font-medium">售价₽</span>
+                <span className="text-sm font-bold text-indigo-600 whitespace-nowrap">
+                  {priceRUB.toFixed(0)}₽
+                </span>
+              </div>
+              
+              <div className="flex flex-col items-center shrink-0">
+                <span className="text-[10px] text-slate-500 font-medium">佣金</span>
+                <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
+                  {result.commissionRate.toFixed(0)}%
+                </span>
+              </div>
+              
+              <div className="flex flex-col items-center shrink-0">
+                <span className="text-[10px] text-slate-500 font-medium">运费</span>
+                <span className="text-sm font-bold text-teal-600 whitespace-nowrap">
+                  ¥{result.costs.internationalShipping.toFixed(1)}
+                </span>
+              </div>
+            </div>
+            
+            {/* 右侧：快捷操作 */}
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReset}
+                className="h-7 px-2 text-xs text-slate-600 border-slate-300 hover:bg-slate-100"
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                重置
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      {/* 🔹 主内容区 - 三栏布局 */}
+      <main className="flex-1 container mx-auto px-4 py-3">
+        <div className="grid grid-cols-12 gap-3 h-[calc(100vh-8rem)]">
+          {/* 左侧输入区 30% */}
+          <div className="col-span-4 overflow-y-auto scrollbar-thin">
             <InputPanel
               input={input}
               onInputChange={handleInputChange}
@@ -371,12 +683,13 @@ export default function Home() {
               marginError={marginError}
               onReset={handleReset}
               adRiskControl={result.adRiskControl}
-              shippingData={shippingData} // 🔹 传入物流数据
+              shippingData={shippingData}
+              selectedBillingInfo={selectedBillingInfo}
             />
           </div>
 
-          {/* 右侧看板区 60% */}
-          <div className="w-[60%] sticky top-20 self-start max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-thin">
+          {/* 中间财务看板 35% */}
+          <div className="col-span-4 overflow-y-auto scrollbar-thin">
             <Dashboard
               result={result}
               input={input}
@@ -393,8 +706,370 @@ export default function Home() {
               commission={commission}
             />
           </div>
+
+          {/* 右侧物流列表 35% */}
+          <div className="col-span-4 flex flex-col gap-3 overflow-hidden">
+            {/* 🔹 数据管理抽屉 */}
+            <div className="bg-card rounded-lg border p-3">
+              <div 
+                className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded p-1 -m-1 transition-colors"
+                onClick={() => setDataManagementOpen(!dataManagementOpen)}
+              >
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  数据管理
+                  {shippingData.length > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                      已加载 {shippingData.length} 条
+                    </span>
+                  )}
+                </h3>
+                <ChevronDown className={`h-4 w-4 transition-transform ${dataManagementOpen ? 'rotate-180' : ''}`} />
+              </div>
+              
+              {dataManagementOpen && (
+                <div className="mt-3 space-y-3">
+                  {/* 佣金表上传 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-xs text-muted-foreground">佣金表 CSV</Label>
+                      <button
+                        onClick={() => downloadTemplate("commission")}
+                        className="text-[10px] text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                      >
+                        <Download className="h-3 w-3" />
+                        下载模板
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleCommissionFileUpload}
+                        className="text-xs h-8"
+                      />
+                    </div>
+                    {commissionFileName && (
+                      <div className="flex items-center gap-1 mt-1 text-[10px] text-green-600">
+                        <FileText className="h-3 w-3" />
+                        <span>{commissionFileName}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* 物流表上传 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-xs text-muted-foreground">物流表 CSV</Label>
+                      <button
+                        onClick={() => downloadTemplate("shipping")}
+                        className="text-[10px] text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                      >
+                        <Download className="h-3 w-3" />
+                        下载模板
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleShippingFileUpload}
+                        className="text-xs h-8"
+                      />
+                    </div>
+                    {shippingFileName && (
+                      <div className="flex items-center gap-1 mt-1 text-[10px] text-green-600">
+                        <FileText className="h-3 w-3" />
+                        <span>{shippingFileName}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* 配置导入导出 */}
+                  <div className="pt-2 border-t">
+                    <Label className="text-xs text-muted-foreground mb-1 block">配置管理</Label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          try {
+                            importConfig(
+                              () => {
+                                alert("✅ 配置导入成功！页面将刷新...");
+                                window.location.reload();
+                              },
+                              (err) => alert(`❌ 导入失败: ${err}`)
+                            );
+                          } catch (e) {
+                            console.error("导入配置失败:", e);
+                          }
+                        }}
+                        className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-1"
+                      >
+                        <Settings className="h-3 w-3" />
+                        导入配置
+                      </button>
+                      <button
+                        onClick={() => {
+                          exportConfig();
+                          alert("✅ 配置已导出！");
+                        }}
+                        className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-1"
+                      >
+                        <Download className="h-3 w-3" />
+                        导出配置
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* 物流筛选区 */}
+            <div className="bg-card rounded-lg border p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Truck className="h-4 w-4" />
+                  物流渠道
+                </h3>
+                <span className="text-[10px] text-muted-foreground">
+                  可用 {shippingChannels.available.length} / 总计 {shippingChannels.available.length + shippingChannels.unavailable.length}
+                </span>
+              </div>
+              {/* 物流下拉筛选 */}
+              <Select 
+                value={input.designatedProvider || "全部"} 
+                onValueChange={(value) => handleInputChange({ ...input, designatedProvider: value === "全部" ? "" : value })}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="全部物流商" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="全部">全部物流商</SelectItem>
+                  {[...new Set(shippingData.map(ch => ch.thirdParty).filter(Boolean))].sort().map(provider => (
+                    <SelectItem key={provider} value={provider}>{provider}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* 🔹 唯一物流列表（唯一物流模块） */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin space-y-2">
+              {/* 🔹 智能推荐提示 */}
+              {!input.designatedProvider && shippingChannels.available.length > 0 && (
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-blue-600">💡</span>
+                    <span className="text-blue-700">
+                      根据您的商品属性，已为您智能推荐最省钱的前 <strong>{Math.min(shippingChannels.available.length, 5)}</strong> 条渠道
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              {/* 可用渠道 */}
+              {shippingChannels.available.slice(0, 10).map((channel) => {
+                const cost = channelCosts.get(channel.id) ?? 0;
+                const billing = channelBillingInfo.get(channel.id);
+                const isSelected = selectedChannel?.id === channel.id;
+                const mode = billing?.mode || "取大";
+                const hasVolumetricBilling = supportsVolumetricBilling(channel);
+                const showVolumetricWarning = hasVolumetricBilling && billing?.isVolumetric;
+                const divisor = billing?.divisor || 12000;
+                const weightPerGram = channel.varFeePerGram;
+                const billingWeight = billing?.billingWeight || channel.maxWeight;
+                const variableCost = weightPerGram * billingWeight;
+                
+                return (
+                  <div
+                    key={channel.id}
+                    onClick={() => handleSelectChannel(channel)}
+                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all relative ${
+                      isSelected 
+                        ? "bg-blue-50 border-blue-500 shadow-lg ring-4 ring-blue-200" 
+                        : "bg-white border-gray-200 hover:border-blue-300 hover:shadow-md"
+                    }`}
+                  >
+                    {/* 🔹 选中徽章 - 右上角 */}
+                    {isSelected && (
+                      <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                        已选
+                      </div>
+                    )}
+                    {/* 物流身份标题 */}
+                    <div className="flex items-start justify-between mb-2 pb-2 border-b border-gray-100">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm font-bold ${isSelected ? "text-blue-700" : "text-slate-800"}`}>{channel.thirdParty}</span>
+                          <span className="text-slate-400">-</span>
+                          <span className={`text-sm font-semibold ${isSelected ? "text-blue-600" : "text-slate-700"}`}>{channel.name}</span>
+                        </div>
+                        {/* 服务评级 */}
+                        <div className="flex items-center gap-2 mt-1">
+                          {renderOzonRating(channel.ozonRating)}
+                          {channel.ozonRating > 0 && (
+                            <span className="text-[10px] text-slate-500">Ozon评级</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* 官方时效 */}
+                      <div className="shrink-0 ml-2 text-right">
+                        <div className="text-xs text-slate-600">⏱️ 时效</div>
+                        <div className={`text-sm font-bold ${
+                          channel.deliveryTimeMax <= 15 ? "text-green-600" :
+                          channel.deliveryTimeMax <= 25 ? "text-amber-600" :
+                          "text-slate-600"
+                        }`}>
+                          {channel.deliveryTimeMin}-{channel.deliveryTimeMax}天
+                        </div>
+                        {/* 🔹 总运费 - 选中时更醒目 */}
+                        <div className={`text-lg font-black mt-1 ${
+                          isSelected ? "text-blue-600" : "text-teal-600"
+                        }`}>
+                          ¥{cost.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* 计费模式标签 */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                        showVolumetricWarning 
+                          ? "bg-purple-600 text-white animate-pulse" 
+                          : mode === "取大"
+                            ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                            : "bg-slate-500 text-white"
+                      }`}>
+                        {showVolumetricWarning ? "⚠️ 计抛预警" : mode === "取大" ? "⚖️ 取大模式" : "⚖️ 实重模式"}
+                      </span>
+                      {hasVolumetricBilling && (
+                        <span className="text-[10px] text-slate-500">系数: {divisor}</span>
+                      )}
+                    </div>
+                    
+                    {/* 重量对比（核心） */}
+                    <div className="bg-gradient-to-r from-slate-50 to-purple-50 rounded-lg p-2.5 space-y-1.5">
+                      {/* 实重 */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-slate-600 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                          实重 (Actual)
+                        </span>
+                        <span className="text-sm font-bold text-slate-800">{billing?.actualWeight.toFixed(0) || 0} g</span>
+                      </div>
+                      
+                      {/* 抛重 */}
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[11px] flex items-center gap-1 ${
+                          hasVolumetricBilling ? "text-purple-600" : "text-slate-600"
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full ${hasVolumetricBilling ? "bg-purple-500" : "bg-slate-400"}`}></span>
+                          抛重 (Volumetric)
+                        </span>
+                        <div className="text-right">
+                          <span className={`text-sm font-bold ${hasVolumetricBilling ? "text-purple-600" : "text-slate-800"}`}>
+                            {billing?.volumetricWeight.toFixed(0) || 0} g
+                          </span>
+                          {hasVolumetricBilling && (
+                            <div className="text-[9px] text-slate-400">
+                              {input.length}×{input.width}×{input.height} / {divisor} × 1000
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* 计费重 - 仅在触发计抛时高亮显示 */}
+                      {showVolumetricWarning && (
+                        <div className="flex items-center justify-between pt-1.5 border-t-2 border-purple-300 mt-1.5 bg-purple-100 -mx-2 px-2 py-1 rounded">
+                          <span className="text-[11px] text-purple-700 font-bold flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
+                            计费重 (Billing)
+                          </span>
+                          <span className="text-sm font-bold text-purple-700 bg-purple-200 px-2 py-0.5 rounded animate-pulse">
+                            {billing?.billingWeight.toFixed(0)} g [抛重计费]
+                          </span>
+                        </div>
+                      )}
+                      {!showVolumetricWarning && billing && (
+                        <div className="flex items-center justify-between pt-1.5 border-t border-gray-200 mt-1.5">
+                          <span className="text-[11px] text-slate-500 font-medium">计费重</span>
+                          <span className="text-sm font-bold text-slate-700">
+                            {billing.billingWeight.toFixed(0)} g [实重计费]
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* 计费公式透明化 */}
+                    <div className="mt-2 pt-2 border-t border-gray-100">
+                      <div className="text-[10px] text-slate-500 mb-1">计费公式：</div>
+                      <div className={`rounded p-2 ${isSelected ? "bg-blue-50 border border-blue-200" : "bg-teal-50"}`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm font-bold ${isSelected ? "text-blue-700" : "text-teal-700"}`}>
+                            ¥{cost.toFixed(2)}
+                          </span>
+                          <span className={`text-[11px] ${isSelected ? "text-blue-600" : "text-teal-600"}`}>
+                            = ¥{channel.fixFee.toFixed(2)} + ({billingWeight.toFixed(0)}g × ¥{weightPerGram.toFixed(4)})
+                          </span>
+                        </div>
+                        <div className={`flex items-center justify-between text-[10px] mt-1 ${isSelected ? "text-blue-500" : "text-slate-500"}`}>
+                          <span>固定费 + 续重费</span>
+                          <span>¥{channel.fixFee.toFixed(2)} + ¥{variableCost.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* 不可用渠道（灰色卡片 + 拦截原因） */}
+              {shippingChannels.unavailable.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-red-200">
+                  <div className="flex items-center gap-2 text-xs text-red-600 font-semibold mb-2">
+                    <AlertCircle className="h-4 w-4" />
+                    被拦截的渠道 ({shippingChannels.unavailable.length})
+                  </div>
+                  <div className="space-y-2">
+                    {shippingChannels.unavailable.slice(0, 5).map((channel) => (
+                      <div key={channel.id} className="p-2.5 rounded-lg bg-red-50/50 border border-red-100 opacity-75">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-red-700 truncate">
+                              {channel.thirdParty} - {channel.name}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-1.5 bg-red-100/50 p-1.5 rounded">
+                          <AlertCircle className="h-3 w-3 text-red-500 shrink-0 mt-0.5" />
+                          <span className="text-[10px] text-red-600 font-medium">{channel.reason}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </main>
+      
+      {/* 🔹 CSV 列映射弹窗 */}
+      {parsedCsvData && (
+        <PreviewMappingDialog
+          open={mappingDialogOpen}
+          onOpenChange={(open) => {
+            setMappingDialogOpen(open);
+            if (!open) {
+              setPendingMappingFile(null);
+              setParsedCsvData(null);
+            }
+          }}
+          parsedData={parsedCsvData}
+          dataType={mappingDataType}
+          onConfirm={handleMappingConfirm}
+          onCancel={handleMappingCancel}
+        />
+      )}
     </div>
   );
 }
