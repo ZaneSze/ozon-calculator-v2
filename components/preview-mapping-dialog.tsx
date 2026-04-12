@@ -40,7 +40,10 @@ export function PreviewMappingDialog({
   const [mappings, setMappings] = useState<FieldMapping[]>(parsedData.mappings);
   
   // 🔹 字段分级定义
-  const FIELD_TIER = {
+  const FIELD_TIER: {
+    REQUIRED: Record<"commission" | "shipping", string[]>;
+    ENHANCED: Record<"commission" | "shipping", string[]>;
+  } = {
     // 核心字段：必须映射才能计算
     REQUIRED: {
       commission: ["primaryCategory", "secondaryCategory", "tier1Rate", "tier2Rate", "tier3Rate"],
