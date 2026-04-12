@@ -44,7 +44,9 @@ interface DataHubContextType {
     height: number,
     weight: number,
     priceRUB: number,
-    exchangeRate: number
+    exchangeRate: number,
+    hasBattery?: boolean,
+    hasLiquid?: boolean
   ) => { available: ShippingChannel[]; unavailable: (ShippingChannel & { reason: string })[] };
 }
 
