@@ -13,6 +13,7 @@ export interface FieldMapping {
   columnIndex: number;      // 列索引
   confidence: number;       // 匹配置信度 (0-1)
   manual?: boolean;         // 是否手动指定
+  interceptionEnabled?: boolean; // 🔹 是否启用拦截筛选（仅拦截字段）
 }
 
 export interface ParsedData {
@@ -29,6 +30,173 @@ export interface ParsedData {
 
 export interface SynonymBank {
   [key: string]: string[]; // 字段名 -> 同义词列表
+}
+
+// ========================================================
+// LOGISTICS_SCHEMA - 物流表系统字段库
+// ========================================================
+
+export interface LogisticsSchemaField {
+  key: string;
+  label: string;
+  type: 'string' | 'number' | 'boolean' | 'any';
+  required: boolean;
+  interceptor?: boolean; // 是否参与拦截引擎
+  aliases: string[];     // CSV 表头同义词
+}
+
+export const LOGISTICS_SCHEMA: LogisticsSchemaField[] = [
+  // --- 基础必填项 (不可关闭筛选) ---
+  { key: 'serviceTier', label: '评分组', type: 'string', required: true, aliases: ['评分组', 'Scoring', 'tier', 'Extra Small', 'Small', 'Big', 'Budget'] },
+  { key: 'serviceLevel', label: '服务等级', type: 'string', required: true, aliases: ['服务等级', 'Service', 'level', '等级', 'Express', 'Standard', 'Economy'] },
+  { key: 'thirdParty', label: '第三方物流', type: 'string', required: true, aliases: ['第三方物流', '3PL', 'carrier', '物流商', 'RETS', 'ZTO', 'ATC', 'GUOO'] },
+  { key: 'name', label: '配送方式', type: 'string', required: true, aliases: ['配送方式', 'Method', 'channel', '方式', 'RETS Express', 'ZTO Standard'] },
+  { key: 'rate', label: '费率', type: 'string', required: true, aliases: ['费率', 'rate', '费用', '运费', '费率（PUDO揽收点揽收'] },
+
+  // --- 拦截限制项 (深度参与筛选，用户可开关) ---
+  { key: 'ozonRating', label: 'Ozon评级', type: 'number', required: false, interceptor: true, aliases: ['Ozon评级', 'Rating', '评分', 'Ozon'] },
+  { key: 'deliveryTime', label: '时效 (天)', type: 'string', required: false, interceptor: true, aliases: ['时效限制', '时效', 'delivery time', '天'] },
+  { key: 'minWeight', label: '最小实重 (g)', type: 'number', required: false, interceptor: true, aliases: ['货件重量限制 / 最小', '最小重量', 'min weight', '最小（克）'] },
+  { key: 'maxWeight', label: '最大实重 (g)', type: 'number', required: false, interceptor: true, aliases: ['货件重量限制 / 最大', '最大重量', 'max weight', '最大（克）'] },
+  { key: 'sizeConstraints', label: '尺寸限制', type: 'string', required: false, interceptor: true, aliases: ['尺寸限制', 'dimensions', '最大（厘米）', '边长总和'] },
+  { key: 'maxValueRUB', label: '最大货值 (₽)', type: 'number', required: false, interceptor: true, aliases: ['货值限制/最低-最高（卢布）', '货值限制', 'max value', '卢布'] },
+  { key: 'batteryAllowed', label: '电池', type: 'boolean', required: false, interceptor: true, aliases: ['电池', 'battery'] },
+  { key: 'liquidAllowed', label: '液体', type: 'boolean', required: false, interceptor: true, aliases: ['液体', 'liquid'] },
+  
+  // --- 计费与可选字段 ---
+  { key: 'billingType', label: '计费类型', type: 'string', required: false, aliases: ['计费类型', 'billing', '实际重量'] },
+  { key: 'volumetricDivisor', label: '体积重除数', type: 'number', required: false, aliases: ['体积重量计算方式', 'volumetric'] },
+];
+
+// 拦截配置类型
+export interface InterceptionConfig {
+  [key: string]: boolean; // 字段名 -> 是否启用
+}
+
+// ========================================================
+// LOGISTICS_SCHEMA 智能映射函数
+// ========================================================
+
+/**
+ * 标准化文本（小写、去空格、去标点）
+ */
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\u4e00-\u9fa5]/g, "") // 保留字母、数字、中文
+    .trim();
+}
+
+/**
+ * 计算字符串相似度（编辑距离）
+ */
+function calculateSimilarity(str1: string, str2: string): number {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  
+  if (len1 === 0 || len2 === 0) return 0;
+  
+  const matrix: number[][] = [];
+  
+  for (let i = 0; i <= len1; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= len2; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // 删除
+        matrix[i][j - 1] + 1,      // 插入
+        matrix[i - 1][j - 1] + cost // 替换
+      );
+    }
+  }
+  
+  const distance = matrix[len1][len2];
+  const maxLength = Math.max(len1, len2);
+  return 1 - distance / maxLength;
+}
+
+/**
+ * 基于 LOGISTICS_SCHEMA 自动创建映射
+ */
+export function createLogisticsMappings(headers: string[]): FieldMapping[] {
+  const mappings: FieldMapping[] = [];
+  
+  for (const field of LOGISTICS_SCHEMA) {
+    let bestMatch: { index: number; confidence: number } = { index: -1, confidence: 0 };
+    
+    // 遍历所有 CSV 列头，寻找最佳匹配
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i];
+      if (!header || header.trim() === "") continue;
+      
+      const normalizedHeader = normalizeText(header);
+      
+      // 使用同义词进行匹配
+      for (const alias of field.aliases) {
+        const normalizedAlias = normalizeText(alias);
+        
+        // 完全匹配
+        if (normalizedHeader === normalizedAlias) {
+          bestMatch = { index: i, confidence: 1.0 };
+          break;
+        }
+        
+        // 包含匹配
+        if (normalizedHeader.includes(normalizedAlias) || normalizedAlias.includes(normalizedHeader)) {
+          const score = 0.85;
+          if (score > bestMatch.confidence) {
+            bestMatch = { index: i, confidence: score };
+          }
+        }
+        
+        // 相似度匹配（编辑距离）
+        const similarity = calculateSimilarity(normalizedHeader, normalizedAlias);
+        if (similarity > 0.7 && similarity > bestMatch.confidence) {
+          bestMatch = { index: i, confidence: similarity };
+        }
+      }
+      
+      if (bestMatch.confidence === 1.0) break; // 找到完全匹配，退出
+    }
+    
+    // 🔹 默认拦截字段为启用状态
+    const isInterceptor = field.interceptor === true;
+    
+    mappings.push({
+      systemField: field.key,
+      csvColumn: bestMatch.index >= 0 ? headers[bestMatch.index] : null,
+      columnIndex: bestMatch.index,
+      confidence: bestMatch.confidence,
+      interceptionEnabled: isInterceptor, // 拦截字段默认开启
+    });
+  }
+  
+  console.log(`[LOGISTICS_SCHEMA] 自动映射完成: ${mappings.filter(m => m.columnIndex >= 0).length}/${mappings.length} 个字段匹配成功`);
+  
+  return mappings;
+}
+
+/**
+ * 获取字段的中文标签
+ */
+export function getLogisticsFieldLabel(key: string): string {
+  const field = LOGISTICS_SCHEMA.find(f => f.key === key);
+  return field?.label || key;
+}
+
+/**
+ * 检查字段是否为拦截字段
+ */
+export function isInterceptorField(key: string): boolean {
+  const field = LOGISTICS_SCHEMA.find(f => f.key === key);
+  return field?.interceptor === true;
 }
 
 // ========================================================
@@ -279,41 +447,39 @@ export function smartParseCSV(
     // 3. 选择同义词库
     const synonyms = type === "commission" ? COMMISSION_SYNONYMS : SHIPPING_SYNONYMS;
     
-    // 4. 智能匹配字段
-    const mappings: FieldMapping[] = Object.keys(synonyms).map(systemField => {
-      let bestMatch: FieldMapping = {
-        systemField,
-        csvColumn: null,
-        columnIndex: -1,
-        confidence: 0,
-      };
-      
-      // 遍历所有列，寻找最佳匹配
-      for (let i = 0; i < headers.length; i++) {
-        const match = fuzzyMatchHeader(headers[i], { [systemField]: synonyms[systemField] });
+    // 🔹 4. 智能匹配字段（物流表使用 LOGISTICS_SCHEMA）
+    let mappings: FieldMapping[];
+    
+    if (type === "shipping") {
+      // 物流表使用新的 LOGISTICS_SCHEMA
+      mappings = createLogisticsMappings(headers);
+    } else {
+      // 佣金表使用旧的同义词库
+      mappings = Object.keys(synonyms).map(systemField => {
+        let bestMatch: FieldMapping = {
+          systemField,
+          csvColumn: null,
+          columnIndex: -1,
+          confidence: 0,
+        };
         
-        if (match && match.confidence > bestMatch.confidence) {
-          bestMatch = {
-            systemField,
-            csvColumn: headers[i],
-            columnIndex: i,
-            confidence: match.confidence,
-          };
+        // 遍历所有列，寻找最佳匹配
+        for (let i = 0; i < headers.length; i++) {
+          const match = fuzzyMatchHeader(headers[i], { [systemField]: synonyms[systemField] });
+          
+          if (match && match.confidence > bestMatch.confidence) {
+            bestMatch = {
+              systemField,
+              csvColumn: headers[i],
+              columnIndex: i,
+              confidence: match.confidence,
+            };
+          }
         }
-      }
-      
-      // 如果模糊匹配失败，尝试语义预判
-      if (bestMatch.confidence < 0.5 && bestMatch.columnIndex >= 0) {
-        const columnData = normalizedRows.map(row => row[bestMatch.columnIndex] || "");
-        const prediction = predictColumnDataType(columnData);
         
-        if (prediction.confidence > 0.7) {
-          warnings.push(`列 "${headers[bestMatch.columnIndex]}" 通过语义预判识别为 ${prediction.label}`);
-        }
-      }
-      
-      return bestMatch;
-    });
+        return bestMatch;
+      });
+    }
     
     // 5. 统计识别结果
     const recognizedCount = mappings.filter(m => m.confidence >= 0.7).length;
@@ -422,55 +588,6 @@ export function validateData(
     errors,
     warnings: [...warnings, ...parsedData.warnings],
   };
-}
-
-// ========================================================
-// 工具函数
-// ========================================================
-
-/**
- * 标准化文本（小写、去空格、去标点）
- */
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\u4e00-\u9fa5]/g, "") // 保留字母、数字、中文
-    .trim();
-}
-
-/**
- * 计算字符串相似度（编辑距离）
- */
-function calculateSimilarity(str1: string, str2: string): number {
-  const len1 = str1.length;
-  const len2 = str2.length;
-  
-  if (len1 === 0 || len2 === 0) return 0;
-  
-  const matrix: number[][] = [];
-  
-  for (let i = 0; i <= len1; i++) {
-    matrix[i] = [i];
-  }
-  
-  for (let j = 0; j <= len2; j++) {
-    matrix[0][j] = j;
-  }
-  
-  for (let i = 1; i <= len1; i++) {
-    for (let j = 1; j <= len2; j++) {
-      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,      // 删除
-        matrix[i][j - 1] + 1,      // 插入
-        matrix[i - 1][j - 1] + cost // 替换
-      );
-    }
-  }
-  
-  const distance = matrix[len1][len2];
-  const maxLength = Math.max(len1, len2);
-  return 1 - distance / maxLength;
 }
 
 // ========================================================

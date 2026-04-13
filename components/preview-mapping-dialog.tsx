@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,8 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, CheckCircle2, Info, XCircle, Ruler, Lightbulb, Sparkles } from "lucide-react";
-import { ParsedData, FieldMapping, SizeConstraints } from "@/lib/smart-parser";
+import { Switch } from "@/components/ui/switch";
+import { AlertTriangle, CheckCircle2, Info, XCircle, Ruler, Sparkles, Upload, FileText } from "lucide-react";
+import { ParsedData, FieldMapping, SizeConstraints, LOGISTICS_SCHEMA, getLogisticsFieldLabel, isInterceptorField, createLogisticsMappings } from "@/lib/smart-parser";
 
 interface PreviewMappingDialogProps {
   open: boolean;
@@ -39,58 +40,46 @@ export function PreviewMappingDialog({
 }: PreviewMappingDialogProps) {
   const [mappings, setMappings] = useState<FieldMapping[]>(parsedData.mappings);
   
-  // 🔹 字段分级定义
-  const FIELD_TIER: {
-    REQUIRED: Record<"commission" | "shipping", string[]>;
-    ENHANCED: Record<"commission" | "shipping", string[]>;
-  } = {
-    // 核心字段：必须映射才能计算
-    REQUIRED: {
-      commission: ["primaryCategory", "secondaryCategory", "tier1Rate", "tier2Rate", "tier3Rate"],
-      shipping: ["name", "rate"],
-    },
-    // 增强字段：可选，支持智能拦截
-    ENHANCED: {
-      commission: [],
-      shipping: [
-        "sizeConstraints",
-        "batteryAllowed",
-        "liquidAllowed",
-        "maxValueRUB",
-        "minWeight",
-        "maxWeight",
-      ],
-    },
+  // 初始化映射（如果尚未初始化）
+  useEffect(() => {
+    if (dataType === "shipping" && parsedData.headers.length > 0) {
+      // 使用 LOGISTICS_SCHEMA 自动映射
+      const autoMappings = createLogisticsMappings(parsedData.headers);
+      setMappings(autoMappings);
+    } else {
+      setMappings(parsedData.mappings);
+    }
+  }, [parsedData.headers, dataType]);
+  
+  // 获取字段的中文标签
+  const getFieldLabel = (systemField: string): string => {
+    if (dataType === "shipping") {
+      return getLogisticsFieldLabel(systemField);
+    }
+    // 佣金表标签
+    const labels: Record<string, string> = {
+      primaryCategory: "一级类目",
+      secondaryCategory: "二级类目",
+      tier1Rate: "阶梯1 (0-1500 RUB)",
+      tier2Rate: "阶梯2 (1500-5000 RUB)",
+      tier3Rate: "阶梯3 (5000+ RUB)",
+    };
+    return labels[systemField] || systemField;
   };
   
-  // 🔹 智能分析特性提示
-  const SMART_FEATURES: Record<string, { icon: string; label: string }> = {
-    sizeConstraints: {
-      icon: "📐",
-      label: "支持智能拆解：自动识别边长总和与长边限制",
-    },
-    rate: {
-      icon: "🧮",
-      label: "支持公式解析：自动识别首重+续重逻辑",
-    },
-    batteryAllowed: {
-      icon: "🔋",
-      label: "支持属性联动：根据商品带电属性自动筛选",
-    },
-    liquidAllowed: {
-      icon: "💧",
-      label: "支持属性联动：根据商品带液体属性自动筛选",
-    },
-    maxValueRUB: {
-      icon: "💰",
-      label: "支持货值过滤：根据售价自动筛选",
-    },
+  // 判断字段是否为拦截字段
+  const getIsInterceptor = (systemField: string): boolean => {
+    if (dataType === "shipping") {
+      return isInterceptorField(systemField);
+    }
+    return false;
   };
   
   // 获取字段级别
-  const getFieldTier = (field: string): "required" | "enhanced" | "optional" => {
-    if (FIELD_TIER.REQUIRED[dataType]?.includes(field)) return "required";
-    if (FIELD_TIER.ENHANCED[dataType]?.includes(field)) return "enhanced";
+  const getFieldTier = (systemField: string): "required" | "interceptor" | "optional" => {
+    const schemaField = LOGISTICS_SCHEMA.find(f => f.key === systemField);
+    if (schemaField?.required) return "required";
+    if (schemaField?.interceptor) return "interceptor";
     return "optional";
   };
   
@@ -106,8 +95,8 @@ export function PreviewMappingDialog({
       return "error";
     }
     
-    // 增强字段和可选字段
-    if (mapping.columnIndex === -1) return "ignored"; // 未映射
+    // 拦截字段和可选字段
+    if (mapping.columnIndex === -1) return "ignored";
     if (mapping.confidence >= 0.9) return "success";
     if (mapping.confidence >= 0.7) return "warning";
     return "error";
@@ -128,6 +117,15 @@ export function PreviewMappingDialog({
     ));
   };
   
+  // 更新拦截开关
+  const updateInterceptionEnabled = (systemField: string, enabled: boolean) => {
+    setMappings(prev => prev.map(m => 
+      m.systemField === systemField 
+        ? { ...m, interceptionEnabled: enabled }
+        : m
+    ));
+  };
+  
   // 渲染字段状态图标
   const renderStatusIcon = (status: "success" | "warning" | "error" | "ignored") => {
     switch (status) {
@@ -142,29 +140,6 @@ export function PreviewMappingDialog({
     }
   };
   
-  // 获取字段中文名称
-  const getFieldLabel = (systemField: string): string => {
-    const labels: Record<string, string> = {
-      primaryCategory: "一级类目",
-      secondaryCategory: "二级类目",
-      tier1Rate: "阶梯1 (0-1500 RUB)",
-      tier2Rate: "阶梯2 (1500-5000 RUB)",
-      tier3Rate: "阶梯3 (5000+ RUB)",
-      name: "配送方式",
-      thirdParty: "物流商",
-      serviceLevel: "服务等级",
-      rate: "费率",
-      minWeight: "最小重量",
-      maxWeight: "最大重量",
-      maxLength: "最大长度",
-      maxWidth: "最大宽度",
-      maxHeight: "最大高度",
-      deliveryTime: "时效",
-      sizeConstraints: "尺寸限制", // 🔹 新增
-    };
-    return labels[systemField] || systemField;
-  };
-  
   // 预览数据行（只显示前5行）
   const previewRows = parsedData.rows.slice(0, 5);
   
@@ -174,8 +149,11 @@ export function PreviewMappingDialog({
   const totalCount = mappings.length;
   const recognitionRate = Math.round((recognizedCount / totalCount) * 100);
   
+  // 计算已启用拦截的字段数
+  const interceptorEnabledCount = mappings.filter(m => m.interceptionEnabled === true).length;
+  
   // 🔹 检查是否可以确认（只检查核心字段）
-  const requiredFields = FIELD_TIER.REQUIRED[dataType] || [];
+  const requiredFields = LOGISTICS_SCHEMA.filter(f => f.required).map(f => f.key);
   const missingRequired = requiredFields.filter(field => {
     const mapping = mappings.find(m => m.systemField === field);
     return !mapping || mapping.columnIndex === -1;
@@ -183,24 +161,32 @@ export function PreviewMappingDialog({
   
   const canConfirm = missingRequired.length === 0 && parsedData.errors.length === 0;
   
-  // 🔹 计算已启用功能
-  const enabledFeatures = mappings
-    .filter(m => m.columnIndex !== -1 && SMART_FEATURES[m.systemField])
-    .map(m => m.systemField);
-  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {dataType === "commission" ? "📊 佣金表解析预览" : "🚚 物流费率表解析预览"}
+            {dataType === "commission" ? "📊 佣金表智能导入向导" : "🚚 物流表智能导入向导"}
           </DialogTitle>
           <DialogDescription>
-            请检查字段映射是否正确，如有错误可手动修正
+            智能嗅探 CSV 表头，自动匹配系统字段。拦截字段可开关是否参与筛选。
           </DialogDescription>
         </DialogHeader>
         
         <div className="flex-1 overflow-y-auto space-y-4">
+          {/* 步骤提示 */}
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full border border-blue-200">
+              <FileText className="h-4 w-4 text-blue-600" />
+              <span className="text-blue-700 font-medium">步骤1: 文件解析</span>
+            </div>
+            <div className="text-gray-400">→</div>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-full border border-purple-200">
+              <Sparkles className="h-4 w-4 text-purple-600" />
+              <span className="text-purple-700 font-medium">步骤2: 动态映射</span>
+            </div>
+          </div>
+          
           {/* 解析状态 */}
           <div className={`p-4 rounded-lg border-2 ${
             recognitionRate >= 90 ? "bg-green-50 border-green-200" :
@@ -212,6 +198,11 @@ export function PreviewMappingDialog({
               <span className="font-bold">
                 已自动识别 {recognizedCount}/{totalCount} 个核心字段 ({recognitionRate}%)
               </span>
+              {dataType === "shipping" && (
+                <span className="ml-4 text-xs text-purple-600 font-medium">
+                  ✓ 已启用 {interceptorEnabledCount} 个拦截字段
+                </span>
+              )}
             </div>
             
             {/* 错误提示 */}
@@ -225,135 +216,108 @@ export function PreviewMappingDialog({
                 ))}
               </div>
             )}
-            
-            {/* 警告提示 */}
-            {parsedData.warnings.length > 0 && (
-              <div className="mt-3 space-y-1">
-                {parsedData.warnings.map((warning, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm text-amber-700">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                    <span>{warning}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
           
-          {/* 字段映射表 */}
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="p-3 text-left w-12">状态</th>
-                  <th className="p-3 text-left">系统字段</th>
-                  <th className="p-3 text-left">CSV 列名</th>
-                  <th className="p-3 text-left">功能说明</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mappings.map((mapping) => {
-                  const status = getFieldStatus(mapping);
-                  const tier = getFieldTier(mapping.systemField);
-                  const smartFeature = SMART_FEATURES[mapping.systemField];
+          {/* 🔹 三列动态映射面板 */}
+          <div className="border-2 border-slate-200 rounded-lg overflow-hidden">
+            <div className="grid grid-cols-12 bg-slate-100 border-b-2 border-slate-300">
+              <div className="col-span-3 p-3 font-bold text-slate-700 text-sm">系统字段</div>
+              <div className="col-span-5 p-3 font-bold text-slate-700 text-sm">CSV 表头匹配</div>
+              <div className="col-span-4 p-3 font-bold text-slate-700 text-sm text-center">启用拦截筛选</div>
+            </div>
+            
+            {mappings.map((mapping) => {
+              const status = getFieldStatus(mapping);
+              const tier = getFieldTier(mapping.systemField);
+              const isInterceptor = getIsInterceptor(mapping.systemField);
+              
+              return (
+                <div 
+                  key={mapping.systemField} 
+                  className={`grid grid-cols-12 border-b border-slate-200 hover:bg-slate-50 transition-colors ${
+                    status === "error" ? "bg-red-50" : ""
+                  }`}
+                >
+                  {/* 列1: 系统字段名 */}
+                  <div className="col-span-3 p-3 flex flex-col justify-center">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-800 text-sm">{getFieldLabel(mapping.systemField)}</span>
+                    </div>
+                    {/* 字段级别标识 */}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {tier === "required" && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
+                          必填
+                        </span>
+                      )}
+                      {tier === "interceptor" && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">
+                          拦截
+                        </span>
+                      )}
+                      {tier === "optional" && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">
+                          可选
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   
-                  return (
-                    <tr key={mapping.systemField} className={`border-t hover:bg-muted/50 ${
-                      status === "error" ? "bg-red-50" : ""
-                    }`}>
-                      <td className="p-3">
-                        {renderStatusIcon(status)}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{getFieldLabel(mapping.systemField)}</span>
-                            {/* 字段级别标识 */}
-                            {tier === "required" && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
-                                必填
-                              </span>
-                            )}
-                            {tier === "enhanced" && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
-                                增强
-                              </span>
-                            )}
-                            {tier === "optional" && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">
-                                可选
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* 智能功能提示 */}
-                          {smartFeature && mapping.columnIndex !== -1 && (
-                            <div className="flex items-center gap-1 text-[10px] text-blue-600">
-                              <Sparkles className="h-3 w-3" />
-                              <span>{smartFeature.icon}</span>
-                              <span className="italic">{smartFeature.label}</span>
-                            </div>
-                          )}
-                          
-                          {/* 状态说明 */}
-                          {status === "ignored" && (
-                            <div className="text-[10px] text-gray-500 italic">
-                              仅作参考，不参与自动拦截
-                            </div>
-                          )}
-                          {status === "success" && tier === "enhanced" && (
-                            <div className="text-[10px] text-green-600 font-medium">
-                              ✓ 已开启智能过滤功能
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <Select
-                          value={mapping.columnIndex.toString()}
-                          onValueChange={(value) => updateMapping(mapping.systemField, parseInt(value))}
-                        >
-                          <SelectTrigger className={`w-full ${
-                            status === "error" ? "border-red-300 bg-red-50" : ""
-                          }`}>
-                            <SelectValue placeholder="请选择列" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="-1">
-                              {tier === "required" ? "⚠️ 必须选择" : "不映射（跳过）"}
-                            </SelectItem>
-                            {parsedData.headers.map((header, index) => (
-                              <SelectItem key={index} value={index.toString()}>
-                                {header || `列 ${index + 1}`}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full ${
-                                mapping.confidence >= 0.9 ? "bg-green-500" :
-                                mapping.confidence >= 0.7 ? "bg-amber-500" :
-                                "bg-red-500"
-                              }`}
-                              style={{ width: mapping.columnIndex === -1 ? 0 : `${mapping.confidence * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {mapping.columnIndex === -1 ? "未映射" : `${Math.round(mapping.confidence * 100)}%`}
-                          </span>
-                          {mapping.manual && (
-                            <span className="text-xs text-blue-600 font-medium">手动</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  {/* 列2: CSV 表头匹配下拉框 */}
+                  <div className="col-span-5 p-3 flex items-center">
+                    <Select
+                      value={mapping.columnIndex.toString()}
+                      onValueChange={(value) => updateMapping(mapping.systemField, parseInt(value))}
+                    >
+                      <SelectTrigger className={`w-full h-9 ${
+                        status === "error" ? "border-red-300 bg-red-50" : 
+                        status === "success" ? "border-green-300 bg-green-50" : ""
+                      }`}>
+                        <SelectValue placeholder="请选择列" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="-1">
+                          {tier === "required" ? "⚠️ 必须选择" : "不映射（跳过）"}
+                        </SelectItem>
+                        {parsedData.headers.map((header, index) => (
+                          <SelectItem key={index} value={index.toString()}>
+                            {header || `列 ${index + 1}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    {/* 置信度指示 */}
+                    <div className="ml-2 flex items-center gap-1">
+                      {renderStatusIcon(status)}
+                      <span className="text-xs text-muted-foreground">
+                        {mapping.columnIndex === -1 ? "未映射" : `${Math.round(mapping.confidence * 100)}%`}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* 列3: 启用拦截 Toggle */}
+                  <div className="col-span-4 p-3 flex items-center justify-center">
+                    {isInterceptor ? (
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={mapping.interceptionEnabled === true}
+                          onCheckedChange={(checked) => updateInterceptionEnabled(mapping.systemField, checked)}
+                          className="data-[state=checked]:bg-purple-600"
+                        />
+                        <span className={`text-xs font-medium ${
+                          mapping.interceptionEnabled === true ? "text-purple-700" : "text-gray-400"
+                        }`}>
+                          {mapping.interceptionEnabled === true ? "已启用" : "已禁用"}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">不参与拦截</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           
           {/* 数据预览 */}
@@ -453,9 +417,9 @@ export function PreviewMappingDialog({
           <div className="flex items-center justify-between text-xs text-muted-foreground pb-2 border-b">
             <div className="flex items-center gap-4">
               <span>已映射: {mappedCount}/{totalCount}</span>
-              {enabledFeatures.length > 0 && (
-                <span className="text-blue-600">
-                  ✓ 已启用 {enabledFeatures.length} 个智能功能
+              {dataType === "shipping" && interceptorEnabledCount > 0 && (
+                <span className="text-purple-600 font-medium">
+                  ✓ 拦截字段: {interceptorEnabledCount} 个
                 </span>
               )}
             </div>

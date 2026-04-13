@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
-import { CategoryCommission, ShippingChannel } from "./types";
+import { CategoryCommission, ShippingChannel, UnavailableShippingChannel, ShippingInterceptionReason } from "./types";
 import {
   COMMISSION_COLUMN_KEYWORDS,
   SHIPPING_COLUMN_KEYWORDS,
@@ -31,11 +31,13 @@ interface DataHubContextType {
   commissionLoaded: boolean;
   shippingLoaded: boolean;
   columnMapping: ColumnMapping;
+  interceptionConfig: Record<string, boolean>; // 🔹 拦截配置
   loadCommissionData: (file: File, mode?: "overwrite" | "merge") => Promise<void>;
   loadShippingData: (file: File, mode?: "overwrite" | "merge") => Promise<void>;
   clearCommissionData: () => void;
   clearShippingData: () => void;
   updateColumnMapping: (type: "commission" | "shipping", mapping: Record<string, number>) => void;
+  updateInterceptionConfig: (config: Record<string, boolean>) => void;
   getCategories: () => { primary: string; secondary: string[] }[];
   getCommissionByCategory: (primary: string, secondary: string) => CategoryCommission | undefined;
   getShippingChannels: (
@@ -429,8 +431,23 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
     commission: {},
     shipping: {},
   });
+  
+  // 🔹 拦截配置状态（从 localStorage 恢复）
+  const [interceptionConfig, setInterceptionConfig] = useState<Record<string, boolean>>({});
 
-  // 从 localStorage 恢复数据
+  // 从 localStorage 恢复拦截配置
+  useEffect(() => {
+    try {
+      const savedConfig = localStorage.getItem("ozon_interception_config");
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
+        setInterceptionConfig(parsed);
+        console.log("[数据中心] 从 localStorage 恢复拦截配置:", parsed);
+      }
+    } catch (e) {
+      console.error("[数据中心] 恢复拦截配置失败:", e);
+    }
+  }, []);
   useEffect(() => {
     try {
       // 🔹 数据版本控制：清除旧版本数据
@@ -941,6 +958,15 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  /**
+   * 🔹 更新拦截配置（保存用户开关状态到 localStorage）
+   */
+  const updateInterceptionConfig = useCallback((config: Record<string, boolean>) => {
+    setInterceptionConfig(config);
+    localStorage.setItem("ozon_interception_config", JSON.stringify(config));
+    console.log("[数据中心] 拦截配置已更新:", config);
+  }, []);
+
   const getCategories = useCallback(() => {
     const map = new Map<string, string[]>();
     commissionData.forEach((item) => {
@@ -974,61 +1000,164 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
       designatedProvider: string = "" // 🔹 指定物流商过滤
     ) => {
       const priceRMB = priceRUB * exchangeRate;
+      
+      // 🔹 关键：排序尺寸 - 包裹可以旋转，比较最长边
+      const productDims = [length, width, height].sort((a, b) => b - a);
+      const pLongest = productDims[0];  // 最长边
+      const pMiddle = productDims[1];  // 中间边
+      const pShortest = productDims[2]; // 最短边
       const sumDim = length + width + height;
-      const maxSide = Math.max(length, width, height);
+      
+      // 计算体积重
+      const calculateVolWeight = (channel: ShippingChannel): number => {
+        if (!channel.volumetricDivisor || channel.volumetricDivisor === 0) return 0;
+        return (length * width * height / channel.volumetricDivisor) * 1000;
+      };
+      
       const available: ShippingChannel[] = [];
-      const unavailable: (ShippingChannel & { reason: string })[] = [];
+      const unavailable: UnavailableShippingChannel[] = [];
 
       shippingData.forEach((channel) => {
         const reasons: string[] = [];
+        const interceptionReasons: ShippingInterceptionReason[] = [];
         
         // 🔹 预过滤：指定物流商
         if (designatedProvider && channel.thirdParty !== designatedProvider) {
-          unavailable.push({ ...channel, reason: `指定物流商过滤: 仅显示 ${designatedProvider}` });
+          unavailable.push({ 
+            ...channel, 
+            reason: `指定物流商过滤: 仅显示 ${designatedProvider}`,
+            interceptionReasons: [] 
+          });
           return;
         }
         
-        // 🔹 属性硬拦截：电池
-        if (hasBattery && !channel.batteryAllowed) {
-          reasons.push("❌ 该渠道禁止带电商品");
+        // ========== 六维绝对拦截引擎（读取 interceptionConfig 判断是否启用） ==========
+        
+        // 维度一：货值拦截 (Value Limit) - 仅当启用时
+        if (interceptionConfig.maxValueRUB !== false) {
+          const channelMaxValueRMB = channel.maxValueRUB ? channel.maxValueRUB * exchangeRate : channel.maxValue;
+          if (priceRMB > channelMaxValueRMB) {
+            reasons.push(`🚫 货值拦截: ¥${priceRMB.toFixed(0)} > ¥${channelMaxValueRMB.toFixed(0)} (渠道上限)`);
+            interceptionReasons.push({
+              dimension: "货值",
+              code: "VALUE_LIMIT",
+              message: `商品售价超出渠道货值上限`,
+              details: `商品 ¥${priceRMB.toFixed(0)} > 渠道 ¥${channelMaxValueRMB.toFixed(0)}`
+            });
+          }
         }
         
-        // 🔹 属性硬拦截：液体
-        if (hasLiquid && !channel.liquidAllowed) {
-          reasons.push("❌ 该渠道禁止带液体商品");
+        // 维度二：物理实重拦截 (Actual Weight Limit) - 仅当启用时
+        if (interceptionConfig.minWeight !== false || interceptionConfig.maxWeight !== false) {
+          if (weight < channel.minWeight) {
+            reasons.push(`🚫 实重不足: ${weight}g < ${channel.minWeight}g (最低起重要求)`);
+            interceptionReasons.push({
+              dimension: "实重",
+              code: "WEIGHT_TOO_LOW",
+              message: `低于最小起重要求`,
+              details: `商品 ${weight}g < 渠道最小 ${channel.minWeight}g`
+            });
+          }
+          if (weight > channel.maxWeight) {
+            reasons.push(`🚫 实重超限: ${weight}g > ${channel.maxWeight}g`);
+            interceptionReasons.push({
+              dimension: "实重",
+              code: "WEIGHT_TOO_HIGH",
+              message: `超过最大实重限制`,
+              details: `商品 ${weight}g > 渠道最大 ${channel.maxWeight}g`
+            });
+          }
         }
         
-        // 🔹 物理参数拦截：重量
-        if (weight > channel.maxWeight) {
-          reasons.push(`超重: ${weight}g > ${channel.maxWeight}g`);
-        }
-        if (weight < channel.minWeight) {
-          reasons.push(`不足最小重量: ${weight}g < ${channel.minWeight}g`);
+        // 维度三：绝对边长拦截 (Edge Length Limit) - 排序后比较 - 仅当启用时
+        if (interceptionConfig.maxLength !== false || interceptionConfig.maxSumDimension !== false) {
+          const channelDims = [channel.maxLength || 0, channel.maxWidth || 0, channel.maxHeight || 0].sort((a, b) => b - a);
+          const cLongest = channelDims[0];
+          const cMiddle = channelDims[1];
+          const cShortest = channelDims[2];
+          
+          if (interceptionConfig.maxLength !== false) {
+            if (pLongest > cLongest) {
+              reasons.push(`🚫 单边超限: 商品最长边 ${pLongest}cm > 渠道限制 ${cLongest}cm`);
+              interceptionReasons.push({
+                dimension: "边长",
+                code: "EDGE_TOO_LONG",
+                message: `单边尺寸超限（包裹可旋转）`,
+                details: `商品最长边 ${pLongest}cm > 渠道 ${cLongest}cm`
+              });
+            }
+            if (pMiddle > cMiddle) {
+              reasons.push(`🚫 单边超限: 商品中间边 ${pMiddle}cm > 渠道限制 ${cMiddle}cm`);
+              interceptionReasons.push({
+                dimension: "边长",
+                code: "EDGE_TOO_LONG",
+                message: `单边尺寸超限（包裹可旋转）`,
+                details: `商品中间边 ${pMiddle}cm > 渠道 ${cMiddle}cm`
+              });
+            }
+            if (pShortest > cShortest) {
+              reasons.push(`🚫 单边超限: 商品最短边 ${pShortest}cm > 渠道限制 ${cShortest}cm`);
+              interceptionReasons.push({
+                dimension: "边长",
+                code: "EDGE_TOO_LONG",
+                message: `单边尺寸超限（包裹可旋转）`,
+                details: `商品最短边 ${pShortest}cm > 渠道 ${cShortest}cm`
+              });
+            }
+          }
+          
+          // 维度四：尺寸总和拦截 (Sum of Dimensions Limit) - 仅当启用时
+          if (interceptionConfig.maxSumDimension !== false && sumDim > channel.maxSumDimension) {
+            reasons.push(`🚫 尺寸总和超限: ${sumDim}cm > ${channel.maxSumDimension}cm`);
+            interceptionReasons.push({
+              dimension: "尺寸总和",
+              code: "SUM_DIMENSION_EXCEEDED",
+              message: `长宽高之和超过限制`,
+              details: `${sumDim}cm > 渠道 ${channel.maxSumDimension}cm`
+            });
+          }
         }
         
-        // 🔹 物理参数拦截：尺寸
-        if (maxSide > channel.maxLength) {
-          reasons.push(`超长边: ${maxSide}cm > ${channel.maxLength}cm`);
-        }
-        if (sumDim > channel.maxSumDimension) {
-          reasons.push(`超边长总和: ${sumDim}cm > ${channel.maxSumDimension}cm`);
+        // 维度五：体积重拦截 (Volume Weight Limit) - 仅当启用时
+        if (interceptionConfig.volumetricDivisor !== false) {
+          const volWeight = calculateVolWeight(channel);
+          if (volWeight > (channel.maxWeight * 0.8)) { // 接近上限时预警
+            reasons.push(`⚠️ 体积重警告: ${volWeight.toFixed(0)}g (接近上限)`);
+          }
         }
         
-        // 🔹 物理参数拦截：货值
-        if (priceRMB > channel.maxValue) {
-          reasons.push(`超货值: ¥${priceRMB.toFixed(0)} > ¥${channel.maxValue}`);
+        // 维度六：特殊属性拦截 (Attribute Limit) - 仅当启用时
+        if (interceptionConfig.batteryAllowed !== false && hasBattery && !channel.batteryAllowed) {
+          reasons.push(`🚫 电池拦截: 该渠道禁运带电产品`);
+          interceptionReasons.push({
+            dimension: "电池",
+            code: "BATTERY_NOT_ALLOWED",
+            message: `该渠道禁止带电商品`,
+            details: `商品带电，渠道不允许`
+          });
+        }
+        if (interceptionConfig.liquidAllowed !== false && hasLiquid && !channel.liquidAllowed) {
+          reasons.push(`🚫 液体拦截: 该渠道禁运带液产品`);
+          interceptionReasons.push({
+            dimension: "液体",
+            code: "LIQUID_NOT_ALLOWED",
+            message: `该渠道禁止带液体商品`,
+            details: `商品带液，渠道不允许`
+          });
         }
 
         if (reasons.length > 0) {
-          unavailable.push({ ...channel, reason: reasons.join("; ") });
+          unavailable.push({ 
+            ...channel, 
+            reason: reasons.join(" | "),
+            interceptionReasons
+          });
         } else {
           available.push(channel);
         }
       });
 
       // 按运费升序排列（使用体积重计算）
-      // 注意：当传入 length/width/height/actualWeight 时，calculateShippingCost 会自动计算计费重
-      // 此时第二个参数 chargeableWeight 会被忽略
       available.sort((a, b) => {
         const costA = calculateShippingCost(a, 0, length, width, height, weight);
         const costB = calculateShippingCost(b, 0, length, width, height, weight);
@@ -1053,6 +1182,8 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
         clearCommissionData,
         clearShippingData,
         updateColumnMapping,
+        updateInterceptionConfig, // 🔹 新增
+        interceptionConfig, // 🔹 新增
         getCategories,
         getCommissionByCategory,
         getShippingChannels,

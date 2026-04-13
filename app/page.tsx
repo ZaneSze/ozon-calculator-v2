@@ -171,7 +171,7 @@ function importConfig(onSuccess: () => void, onError: (err: string) => void) {
 }
 
 export default function Home() {
-  const { getCommissionByCategory, getShippingChannels, shippingData, clearCommissionData, clearShippingData, loadCommissionData, loadShippingData } = useDataHub();
+  const { getCommissionByCategory, getShippingChannels, shippingData, clearCommissionData, clearShippingData, loadCommissionData, loadShippingData, updateInterceptionConfig } = useDataHub();
   const [input, setInput] = useState<CalculationInput>(DEFAULT_INPUT);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [marginError, setMarginError] = useState<string | null>(null);
@@ -573,6 +573,16 @@ export default function Home() {
         } else {
           await loadShippingData(pendingMappingFile, "overwrite");
           console.log("物流表上传成功");
+          
+          // 🔹 物流表：提取拦截配置并保存
+          const config: Record<string, boolean> = {};
+          mappings.forEach(m => {
+            if (m.interceptionEnabled !== undefined) {
+              config[m.systemField] = m.interceptionEnabled;
+            }
+          });
+          updateInterceptionConfig(config);
+          console.log("拦截配置已保存:", config);
         }
       } catch (err) {
         console.error("上传数据失败:", err);
@@ -581,7 +591,7 @@ export default function Home() {
     
     setPendingMappingFile(null);
     setParsedCsvData(null);
-  }, [pendingMappingFile, mappingDataType, loadCommissionData, loadShippingData]);
+  }, [pendingMappingFile, mappingDataType, loadCommissionData, loadShippingData, updateInterceptionConfig]);
   
   // 🔹 映射取消处理
   const handleMappingCancel = useCallback(() => {
@@ -791,7 +801,7 @@ export default function Home() {
         </div>
       </header>
       
-      {/* 🔹 全局诊断通栏 - 横跨全屏，自适应滚动 */}
+      {/* 🔹 全局诊断通栏 - 横跨全屏，自适应滚动，去重渲染 */}
       <div 
         id="global-diagnostic-bar"
         className="w-full flex flex-wrap justify-center items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-50 via-amber-50 to-slate-50 border-b border-amber-200"
@@ -801,7 +811,15 @@ export default function Home() {
           overflowY: 'auto'
         }}
       >
-        {/* 🔴 阻断错误 - 红色药丸 */}
+        {/* 🔴 致命错误 - 无可用渠道（唯一） */}
+        {shippingChannels.available.length === 0 && shippingData.length > 0 && (
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-red-600 text-white border-2 border-red-700 shadow-lg animate-pulse">
+            <AlertCircle className="h-4 w-4" />
+            <span>致命：商品尺寸/重量/属性无法匹配任何物流渠道</span>
+          </span>
+        )}
+        
+        {/* 🔴 阻断错误 - 亏损（唯一） */}
         {result.netProfit < 0 && (
           <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
             <span>❌</span>
@@ -809,7 +827,7 @@ export default function Home() {
           </span>
         )}
         
-        {/* 尺寸/重量超限 */}
+        {/* 尺寸/重量超限（唯一） */}
         {(() => {
           const sumDim = input.length + input.width + input.height;
           const maxSide = Math.max(input.length, input.width, input.height);
@@ -826,15 +844,30 @@ export default function Home() {
           return null;
         })()}
         
-        {/* 货值拦截 */}
-        {shippingChannels.unavailable.filter(ch => ch.reason?.includes('货值')).slice(0, 2).map((ch, i) => (
-          <span key={`value-${i}`} className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-            <span>❌</span>
-            <span>货值拦截</span>
-          </span>
-        ))}
+        {/* 🔹 货值拦截 - 去重后渲染（基于拦截原因去重） */}
+        {(() => {
+          // 去重：基于 reason 文本进行过滤，保留每个唯一原因类型只显示一次
+          const uniqueReasons = new Map<string, boolean>();
+          const uniqueValueBlocks = shippingChannels.unavailable
+            .filter(ch => ch.reason?.includes('货值'))
+            .filter(ch => {
+              // 提取主要拦截原因作为去重 key
+              const reasonKey = ch.reason.split('|')[0].trim();
+              if (uniqueReasons.has(reasonKey)) return false;
+              uniqueReasons.set(reasonKey, true);
+              return true;
+            })
+            .slice(0, 1); // 最多只显示一个货值拦截提示
+          
+          return uniqueValueBlocks.length > 0 ? (
+            <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+              <span>❌</span>
+              <span>货值拦截</span>
+            </span>
+          ) : null;
+        })()}
         
-        {/* ⚠️ 计抛预警 - 橙色药丸 */}
+        {/* ⚠️ 计抛预警 - 橙色药丸（唯一） */}
         {selectedBillingInfo?.isVolumetric && selectedBillingInfo.billingWeight > selectedBillingInfo.actualWeight && (
           <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
             <span>⚠️</span>
@@ -842,7 +875,7 @@ export default function Home() {
           </span>
         )}
         
-        {/* 广告超支 */}
+        {/* 广告超支（唯一） */}
         {result.adRiskControl?.isOverBudget && (
           <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
             <span>⚠️</span>
@@ -850,15 +883,18 @@ export default function Home() {
           </span>
         )}
         
-        {/* 💡 建议 Tips - 蓝色药丸 (完整显示，无截断) */}
-        {result.suggestions.slice(0, 2).map((s, i) => (
-          <span key={`tip-${i}`} className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
-            <span>💡</span>
-            <span className="whitespace-nowrap">{s}</span>
-          </span>
-        ))}
+        {/* 💡 建议 Tips - 去重后渲染（基于内容去重） */}
+        {(() => {
+          const uniqueSuggestions = Array.from(new Set(result.suggestions.slice(0, 2)));
+          return uniqueSuggestions.map((s, i) => (
+            <span key={`tip-${i}`} className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+              <span>💡</span>
+              <span className="whitespace-nowrap">{s}</span>
+            </span>
+          ));
+        })()}
         
-        {/* 减重建议 - 精简文案 */}
+        {/* 减重建议 - 精简文案（唯一） */}
         {(() => {
           const weightSaved = (selectedBillingInfo?.volumetricWeight || 0) - input.weight;
           if (weightSaved > 50) {
@@ -872,7 +908,7 @@ export default function Home() {
           return null;
         })()}
         
-        {/* ✅ 参数正常提示 */}
+        {/* ✅ 参数正常提示（唯一） */}
         {!result.warnings.length && result.netProfit >= 0 && !selectedBillingInfo?.isVolumetric && (
           <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
             <span>✅</span>
@@ -1123,29 +1159,35 @@ export default function Home() {
                 );
               })}
               
-              {/* 不可用渠道（灰色卡片 + 拦截原因） */}
+              {/* 不可用渠道（灰色卡片 + 红色拦截原因，下沉底部） */}
               {shippingChannels.unavailable.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-red-200">
-                  <div className="flex items-center gap-2 text-xs text-red-600 font-semibold mb-2">
+                <div className="mt-4 pt-4 border-t-2 border-dashed border-slate-300">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold mb-3">
                     <AlertCircle className="h-4 w-4" />
-                    被拦截的渠道 ({shippingChannels.unavailable.length})
+                    不可用渠道 ({shippingChannels.unavailable.length})
                   </div>
                   <div className="space-y-2">
                     {shippingChannels.unavailable.slice(0, 5).map((channel) => (
-                      <div key={channel.id} className="p-2.5 rounded-lg bg-red-50/50 border border-red-100 opacity-75">
-                        <div className="flex items-center justify-between mb-1">
+                      <div key={channel.id} className="p-3 rounded-lg bg-slate-100/60 border border-slate-200 opacity-60 hover:opacity-80 transition-opacity">
+                        <div className="flex items-center justify-between mb-2">
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-red-700 truncate">
+                            <div className="text-sm font-medium text-slate-600 truncate">
                               {channel.thirdParty} - {channel.name}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-start gap-1.5 bg-red-100/50 p-1.5 rounded">
-                          <AlertCircle className="h-3 w-3 text-red-500 shrink-0 mt-0.5" />
-                          <span className="text-[10px] text-red-600 font-medium">{channel.reason}</span>
+                        {/* 红色拦截原因 */}
+                        <div className="flex items-start gap-2 bg-red-50 border border-red-100 p-2 rounded">
+                          <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+                          <span className="text-[10px] text-red-600 font-medium leading-relaxed">{channel.reason}</span>
                         </div>
                       </div>
                     ))}
+                    {shippingChannels.unavailable.length > 5 && (
+                      <div className="text-xs text-slate-400 text-center py-1">
+                        还有 {shippingChannels.unavailable.length - 5} 个不可用渠道...
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

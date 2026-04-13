@@ -41,6 +41,20 @@ export interface ShippingChannel {
   liquidAllowed: boolean;          // 是否允许液体
 }
 
+// 物流拦截原因类型
+export interface ShippingInterceptionReason {
+  dimension: "货值" | "实重" | "边长" | "尺寸总和" | "体积重" | "电池" | "液体";
+  code: string;
+  message: string;
+  details?: string;
+}
+
+// 不可用的物流渠道（含拦截原因）
+export interface UnavailableShippingChannel extends ShippingChannel {
+  reason: string;                  // 拦截原因（多维度用分号分隔）
+  interceptionReasons: ShippingInterceptionReason[];
+}
+
 // 输入参数
 export interface CalculationInput {
   // 商品参数
