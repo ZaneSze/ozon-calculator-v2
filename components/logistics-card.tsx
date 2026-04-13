@@ -81,7 +81,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             : 'bg-white hover:shadow-lg border-blue-100'
       }`}
     >
-      {/* 1. 顶部状态栏：时效 + 计抛强提醒 */}
+      {/* 1. 顶部状态栏：时效 + 计抛强提醒 + Ozon 评级 */}
       <div className="flex justify-between items-center mb-3">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
@@ -91,6 +91,13 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             <span className="animate-pulse bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black shadow-sm">
               ⚠️ 触发计抛
             </span>
+          )}
+          {/* Ozon 评级标签 */}
+          {channel.ozonRating > 0 && (
+            <div className="flex items-center gap-1 bg-yellow-50 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-yellow-200">
+              <span className="text-yellow-500">★</span>
+              <span>{channel.ozonRating.toFixed(1)}</span>
+            </div>
           )}
         </div>
         <div className="text-xs text-slate-400 font-medium">
