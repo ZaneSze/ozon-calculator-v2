@@ -791,13 +791,104 @@ export default function Home() {
         </div>
       </header>
       
+      {/* 🔹 全局诊断通栏 - 横跨全屏，自适应滚动 */}
+      <div 
+        id="global-diagnostic-bar"
+        className="w-full flex flex-wrap justify-center items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-50 via-amber-50 to-slate-50 border-b border-amber-200"
+        style={{ 
+          minHeight: '40px',
+          maxHeight: '100px',
+          overflowY: 'auto'
+        }}
+      >
+        {/* 🔴 阻断错误 - 红色药丸 */}
+        {result.netProfit < 0 && (
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+            <span>❌</span>
+            <span>亏损: ¥{Math.abs(result.netProfit).toFixed(2)}</span>
+          </span>
+        )}
+        
+        {/* 尺寸/重量超限 */}
+        {(() => {
+          const sumDim = input.length + input.width + input.height;
+          const maxSide = Math.max(input.length, input.width, input.height);
+          const dimEx = shippingChannels.available.find(ch => (ch.maxLength && maxSide > ch.maxLength) || (ch.maxSumDimension && sumDim > ch.maxSumDimension));
+          const weightEx = shippingChannels.available.find(ch => ch.maxWeight && input.weight > ch.maxWeight);
+          if (dimEx || weightEx) {
+            return (
+              <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                <span>❌</span>
+                <span>超限</span>
+              </span>
+            );
+          }
+          return null;
+        })()}
+        
+        {/* 货值拦截 */}
+        {shippingChannels.unavailable.filter(ch => ch.reason?.includes('货值')).slice(0, 2).map((ch, i) => (
+          <span key={`value-${i}`} className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+            <span>❌</span>
+            <span>货值拦截</span>
+          </span>
+        ))}
+        
+        {/* ⚠️ 计抛预警 - 橙色药丸 */}
+        {selectedBillingInfo?.isVolumetric && selectedBillingInfo.billingWeight > selectedBillingInfo.actualWeight && (
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
+            <span>⚠️</span>
+            <span>计抛: {selectedBillingInfo.billingWeight.toFixed(0)}g</span>
+          </span>
+        )}
+        
+        {/* 广告超支 */}
+        {result.adRiskControl?.isOverBudget && (
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
+            <span>⚠️</span>
+            <span>广告超支</span>
+          </span>
+        )}
+        
+        {/* 💡 建议 Tips - 蓝色药丸 (完整显示，无截断) */}
+        {result.suggestions.slice(0, 2).map((s, i) => (
+          <span key={`tip-${i}`} className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+            <span>💡</span>
+            <span className="whitespace-nowrap">{s}</span>
+          </span>
+        ))}
+        
+        {/* 减重建议 - 精简文案 */}
+        {(() => {
+          const weightSaved = (selectedBillingInfo?.volumetricWeight || 0) - input.weight;
+          if (weightSaved > 50) {
+            return (
+              <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                <span>💡</span>
+                <span>减重{weightSaved.toFixed(0)}g进下一阶梯</span>
+              </span>
+            );
+          }
+          return null;
+        })()}
+        
+        {/* ✅ 参数正常提示 */}
+        {!result.warnings.length && result.netProfit >= 0 && !selectedBillingInfo?.isVolumetric && (
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+            <span>✅</span>
+            <span>参数正常</span>
+          </span>
+        )}
+      </div>
+      
       {/* 🔹 主内容区 - 三栏布局 */}
       <main className="flex-1 container mx-auto px-4 py-3">
         <div className="grid grid-cols-12 gap-3 h-[calc(100vh-5rem)]">
           {/* 左侧输入区 col-span-3 ≈ 25% */}
-          <div className="col-span-3 flex flex-col gap-3 min-h-0">
-            {/* 输入面板 */}
-            <div className="overflow-y-auto scrollbar-thin">
+          {/* 🔹 重构：Flex 纵向锁定 - 父容器撑满高度，内部独立滚动 */}
+          <div className="col-span-3 flex flex-col h-full">
+            {/* 🔹 上部：参数输入区 - 独立滚动区域 */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin pb-3">
               <InputPanel
                 input={input}
                 onInputChange={handleInputChange}
@@ -808,64 +899,6 @@ export default function Home() {
                 shippingData={shippingData}
                 selectedBillingInfo={selectedBillingInfo}
               />
-            </div>
-            
-            {/* 🔹 警告反馈中心 - 固定高度 h-24 */}
-            <div className="h-24 bg-white rounded-lg border p-3 flex flex-col overflow-hidden">
-              <div className="text-xs font-semibold text-slate-600 mb-2">⚡ 实时状态</div>
-              <div className="flex-1 overflow-y-auto space-y-1">
-                {selectedBillingInfo?.isVolumetric && selectedBillingInfo.billingWeight > selectedBillingInfo.actualWeight ? (
-                  <div className="text-xs text-orange-600 flex items-center gap-1.5 bg-orange-50 p-1.5 rounded">
-                    <AlertCircle className="h-3 w-3" />
-                    <span>⚠️ 计抛预警：计费重 {selectedBillingInfo.billingWeight.toFixed(0)}g (抛重 {selectedBillingInfo.volumetricWeight.toFixed(0)}g &gt; 实重 {selectedBillingInfo.actualWeight.toFixed(0)}g)</span>
-                  </div>
-                ) : (
-                  <div className="text-xs text-green-600 flex items-center gap-1.5">
-                    <span>✅</span>
-                    <span>参数符合渠道要求</span>
-                  </div>
-                )}
-                {/* 尺寸超限检测 */}
-                {(() => {
-                  const sumDim = input.length + input.width + input.height;
-                  const maxSide = Math.max(input.length, input.width, input.height);
-                  const exceeded = shippingChannels.available.find(ch => (ch.maxLength && maxSide > ch.maxLength) || (ch.maxSumDimension && sumDim > ch.maxSumDimension));
-                  if (exceeded) {
-                    return (
-                      <div className="text-xs text-red-600 flex items-center gap-1.5 bg-red-50 p-1.5 rounded">
-                        <span>❌</span>
-                        <span>尺寸超限：{exceeded.thirdParty} 限制</span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-                {/* 重量超限检测 */}
-                {(() => {
-                  const exceeded = shippingChannels.available.find(ch => ch.maxWeight && input.weight > ch.maxWeight);
-                  if (exceeded) {
-                    return (
-                      <div className="text-xs text-red-600 flex items-center gap-1.5 bg-red-50 p-1.5 rounded">
-                        <span>❌</span>
-                        <span>重量超限：{exceeded.thirdParty} 最大 {exceeded.maxWeight}g</span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-                {/* 货值拦截 */}
-                {shippingChannels.unavailable.filter(ch => ch.reason?.includes('货值')).slice(0, 2).map((ch, i) => (
-                  <div key={i} className="text-xs text-red-600 flex items-center gap-1.5 bg-red-50 p-1.5 rounded">
-                    <span>❌</span>
-                    <span>货值拦截：{ch.thirdParty}</span>
-                  </div>
-                ))}
-                {/* 数据状态 */}
-                <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-2 pt-2 border-t">
-                  <span>📊</span>
-                  <span>佣金表: {commissionFileName || "未加载"} | 物流: {shippingData.length} 条</span>
-                </div>
-              </div>
             </div>
           </div>
 

@@ -306,17 +306,7 @@ export function Dashboard({
 
   return (
     <div className="space-y-5 overflow-y-auto max-h-[calc(100vh-6rem)] pr-1 scrollbar-thin">
-      {/* 警告信息 */}
-      {result.warnings.length > 0 && (
-        <div className="space-y-2">
-          {result.warnings.map((w, i) => (
-            <div key={i} className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm">
-              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>{w}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* 警告信息已移至左侧 Live Monitor Console */}
 
 
 
@@ -415,48 +405,6 @@ export function Dashboard({
         </CardContent>
       </Card>
       */}
-
-      {/* 🔹 数据异常检测：佣金阶梯费率相同警告 */}
-      {commission && commission.tiers.length >= 2 && (
-        (() => {
-          const rates = commission.tiers.map(t => t.rate);
-          const allSame = rates.every(r => r === rates[0]);
-          if (allSame) {
-            return (
-              <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-bold mb-1">⚠️ 佣金数据异常！</div>
-                    <div>所有阶梯费率相同 ({rates[0]}%)，可能是数据解析错误。</div>
-                    <div className="mt-2 text-xs">请按以下步骤修复：</div>
-                    <ol className="list-decimal ml-4 mt-1 text-xs space-y-1">
-                      <li>刷新页面（F5）清除缓存</li>
-                      <li>重新上传佣金表 CSV 文件</li>
-                      <li>检查控制台日志确认阶梯费率</li>
-                    </ol>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-          return null;
-        })()
-      )}
-
-
-
-      {/* 建议信息 */}
-      {result.suggestions.length > 0 && (
-        <div className="space-y-2">
-          {result.suggestions.map((s, i) => (
-            <div key={i} className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-              <Lightbulb className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>{s}</span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* 卡片 1：财务精算与成本结构图 */}
       <Card>
