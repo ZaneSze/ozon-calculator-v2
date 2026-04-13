@@ -529,7 +529,7 @@ export function Header({
                 数据中心
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>数据源管理</DialogTitle>
                 <DialogDescription>
@@ -599,6 +599,36 @@ export function Header({
                   <p className="text-xs text-muted-foreground mt-2">
                     无法识别复杂表格？下载标准模板填写后上传
                   </p>
+                </div>
+
+                {/* 使用说明 */}
+                <div className="pt-4 border-t">
+                  <h4 className="font-medium text-sm mb-2 flex items-center gap-1.5">
+                    <span>📖</span> 使用说明
+                  </h4>
+                  <div className="text-xs text-muted-foreground space-y-2 bg-slate-50 p-3 rounded-lg">
+                    <div className="font-medium text-slate-700">物流表字段要求：</div>
+                    <div className="pl-2 space-y-1">
+                      <div>• <span className="font-mono text-blue-600">配送方式</span> - 物流渠道名称（必填）</div>
+                      <div>• <span className="font-mono text-blue-600">服务等级</span> - Express/Standard/Economy</div>
+                      <div>• <span className="font-mono text-blue-600">评分组</span> - Extra Small/Small/Big</div>
+                      <div>• <span className="font-mono text-blue-600">费率</span> - 格式: ¥3.12 + ¥0.0468/1g</div>
+                      <div>• <span className="font-mono text-blue-600">尺寸限制</span> - 格式: 边长总和≤90cm,长边≤60cm</div>
+                      <div>• <span className="font-mono text-blue-600">货值限制-卢布</span> - 格式: 1501-7000</div>
+                    </div>
+                    <div className="font-medium text-slate-700 mt-2">诊断功能：</div>
+                    <div className="pl-2 space-y-1">
+                      <div>• 上传后打开 <span className="font-mono">F12</span> 查看 Console 日志</div>
+                      <div>• <span className="text-green-600">✅</span> = 字段匹配成功</div>
+                      <div>• <span className="text-yellow-600">⚠️</span> = 未匹配（检查表头拼写）</div>
+                    </div>
+                    <div className="font-medium text-slate-700 mt-2">常见问题：</div>
+                    <div className="pl-2 space-y-1">
+                      <div>• Excel 打开乱码 → 已自动添加 UTF-8 BOM</div>
+                      <div>• 字段未识别 → 表头需包含中文或英文别名</div>
+                      <div>• 计费错误 → 展开卡片详情查看计算轨迹</div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-4 border-t">

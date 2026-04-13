@@ -32,6 +32,11 @@ export function downloadCommissionTemplate(): void {
 
 /**
  * 生成并下载标准物流表模板
+ * 格式严格按照系统解析引擎要求：
+ * - 费率: ¥固定费 + ¥变动费/1g
+ * - 尺寸: 边长总和 ≤ 90 cm, 长边 ≤ 60 cm（带空格）
+ * - 货值: 1501 - 7000（带空格）
+ * - 体积重: ÷ 12 000（千分位空格）
  */
 export function downloadShippingTemplate(): void {
   const headers = [
@@ -63,11 +68,11 @@ export function downloadShippingTemplate(): void {
       "¥3.12 + ¥0.0468/1g",
       "禁止",
       "禁止",
-      "边长总和≤90cm,长边≤60cm",
+      "边长总和 ≤ 90 cm, 长边 ≤ 60 cm",
       "1",
       "500",
-      "1-1500",
-      "0.01-135",
+      "1 - 1500",
+      "0.01 - 135",
       "实际重量",
     ],
     [
@@ -80,12 +85,29 @@ export function downloadShippingTemplate(): void {
       "¥5.00 + ¥0.0600/1g",
       "允许",
       "允许",
-      "边长总和≤250cm,长边≤100cm",
+      "边长总和 ≤ 250 cm, 长边 ≤ 100 cm",
       "1",
       "30000",
-      "1-100000",
-      "0.01-8200",
+      "1 - 100000",
+      "0.01 - 8200",
       "实际重量",
+    ],
+    [
+      "GBS Volumetric Big",
+      "Standard",
+      "Big",
+      "GBS",
+      "6",
+      "8-20",
+      "¥8.00 + ¥0.0350/1g",
+      "允许",
+      "禁止",
+      "边长总和 ≤ 150 cm, 长边 ≤ 60 cm",
+      "501",
+      "25000",
+      "1501 - 7000",
+      "100 - 500",
+      "取大 ÷ 12 000",
     ],
   ];
 
@@ -99,9 +121,10 @@ export function downloadShippingTemplate(): void {
 
 /**
  * 下载CSV文件的通用函数
+ * 添加 UTF-8 BOM 以支持 Excel 正确显示中文
  */
 function downloadCSV(content: string, filename: string): void {
-  // 添加 BOM 以支持中文
+  // 关键修复：添加 \ufeff (UTF-8 BOM)，这是 Excel 识别 UTF-8 中文的关键
   const BOM = "\uFEFF";
   const blob = new Blob([BOM + content], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");

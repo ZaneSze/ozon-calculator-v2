@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ShippingChannel, CalculationInput } from "@/lib/types";
+import { CalculationTrace } from "./mapping-debug-panel";
 
 interface LogisticsCardProps {
   channel: ShippingChannel;
@@ -196,6 +197,29 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           <div className="pt-1 border-t border-slate-100 text-[9px] text-slate-400">
             {freightData.formula}
           </div>
+          
+          {/* 计算轨迹 (Debug) */}
+          <CalculationTrace 
+            channel={{
+              name: channel.name,
+              minWeight: channel.minWeight,
+              maxWeight: channel.maxWeight,
+              maxLength: channel.maxLength,
+              maxSumDimension: channel.maxSumDimension,
+              minValueRUB: channel.minValueRUB,
+              maxValueRUB: channel.maxValueRUB,
+              volumetricDivisor: channel.volumetricDivisor,
+            }}
+            input={{
+              weight: input.weight,
+              length: input.length,
+              width: input.width,
+              height: input.height,
+              priceRUB: input.priceRUB,
+            }}
+            interceptionReasons={[]}
+            isAvailable={true}
+          />
         </div>
       </details>
 

@@ -11,6 +11,7 @@ import {
   checkRequiredFields,
 } from "./column-keywords";
 import { DEFAULT_COMMISSION_DATA, DEFAULT_SHIPPING_DATA } from "./default-data";
+import { buildColumnMapping, getFieldSchema, LOGISTICS_FIELDS } from "./constants";
 
 // 佣金阶梯金额边界
 const TIER_BOUNDARIES = [
@@ -669,29 +670,30 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
         const dataRows = rawRows.slice(headerIdx + 1);
         console.log(`[物流解析] 表头: ${JSON.stringify(headers)}`);
 
-        // 列映射
-        const colMap: Record<string, number> = {};
-        headers.forEach((h, i) => {
-          const hl = h.toLowerCase().trim();
-          if (hl.includes("评分组") || hl.includes("scoring")) colMap.tier = i;
-          if (hl.includes("服务等级") || hl.includes("service") && hl.includes("level")) colMap.serviceLevel = i;
-          if (hl.includes("第三方物流") || hl.includes("3pl") || hl.includes("треть")) colMap.thirdParty = i;
-          if (hl.includes("配送方式") || hl.includes("deliveryvariant") || hl.includes("метод")) colMap.name = i;
-          if (hl.includes("评级") || hl.includes("rating") || hl.includes("рейтинг")) colMap.rating = i;
-          if (hl.includes("时效") || hl.includes("срок")) colMap.deliveryTime = i;
-          if (hl.includes("费率") || hl.includes("ставк") || hl.includes("rate")) colMap.rate = i;
-          if (hl.includes("电池") || hl.includes("battery") || hl.includes("батар")) colMap.battery = i;
-          if (hl.includes("液体") || hl.includes("liquid")) colMap.liquid = i;
-          if (hl.includes("尺寸限制") || hl.includes("размер")) colMap.dimension = i;
-          if (hl.includes("重量限制") && hl.includes("最小") || hl.includes("min") && hl.includes("weight")) colMap.minWeight = i;
-          if (hl.includes("重量限制") && hl.includes("最大") || hl.includes("max") && hl.includes("weight")) colMap.maxWeight = i;
-          if (hl.includes("货值限制") && hl.includes("卢布") || hl.includes("rub")) colMap.valueRUB = i;
-          if (hl.includes("货值限制") && hl.includes("人民币") || hl.includes("rmb") || hl.includes("cny")) colMap.valueRMB = i;
-          if (hl.includes("计费类型") || hl.includes("billing")) colMap.billingType = i;
-          if (hl.includes("体积重量") || hl.includes("volumetric")) colMap.volumetricDivisor = i;
-        });
-
-        console.log(`[物流解析] 列映射: ${JSON.stringify(colMap)}`);
+        // 🔴 重构：使用 Schema Registry 进行列映射（零硬编码）
+        const colMap = buildColumnMapping(headers);
+        
+        // 兼容性映射：将 registry key 映射到原有变量名
+        const fieldMapping = {
+          name: colMap['name'] ?? -1,
+          serviceLevel: colMap['serviceLevel'] ?? -1,
+          tier: colMap['serviceTier'] ?? -1,
+          thirdParty: colMap['thirdParty'] ?? -1,
+          rating: colMap['rating'] ?? -1,
+          deliveryTime: colMap['deliveryTime'] ?? -1,
+          rate: colMap['rate'] ?? -1,
+          battery: colMap['battery'] ?? -1,
+          liquid: colMap['liquid'] ?? -1,
+          dimension: colMap['dimension'] ?? -1,
+          minWeight: colMap['minWeight'] ?? -1,
+          maxWeight: colMap['maxWeight'] ?? -1,
+          valueRUB: colMap['valueRUB'] ?? -1,
+          valueRMB: colMap['valueRMB'] ?? -1,
+          billingType: colMap['billingType'] ?? -1,
+          volumetricDivisor: colMap['volumetricDivisor'] ?? -1,
+        };
+        
+        console.log(`[物流解析] 字段映射: ${JSON.stringify(fieldMapping)}`);
 
         const parsed: ShippingChannel[] = [];
         const idCounter = new Map<string, number>(); // 跟踪ID出现次数
@@ -699,10 +701,10 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
 
         for (const row of dataRows) {
           try {
-            const name = colMap.name >= 0 ? row[colMap.name]?.trim() : "";
+            const name = fieldMapping.name >= 0 ? row[fieldMapping.name]?.trim() : "";
             if (!name || name === "" || name === "-") continue;
 
-            const serviceLevel = colMap.serviceLevel >= 0 ? row[colMap.serviceLevel]?.trim() || "" : "";
+            const serviceLevel = fieldMapping.serviceLevel >= 0 ? row[fieldMapping.serviceLevel]?.trim() || "" : "";
             let uniqueId = generateShippingUniqueId(name, serviceLevel);
             
             // 处理重复ID：添加序号后缀
@@ -712,27 +714,27 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             }
             idCounter.set(generateShippingUniqueId(name, serviceLevel), count + 1);
 
-            const rateStr = colMap.rate >= 0 ? row[colMap.rate] || "" : "";
+            const rateStr = fieldMapping.rate >= 0 ? row[fieldMapping.rate] || "" : "";
             const { fixFee, varFeePerGram } = parseShippingRateString(rateStr);
 
-            const dimStr = colMap.dimension >= 0 ? row[colMap.dimension] || "" : "";
+            const dimStr = fieldMapping.dimension >= 0 ? row[fieldMapping.dimension] || "" : "";
             const { maxSum, maxLength: maxLen } = parseDimensionString(dimStr);
 
-            const timeStr = colMap.deliveryTime >= 0 ? row[colMap.deliveryTime] || "" : "";
+            const timeStr = fieldMapping.deliveryTime >= 0 ? row[fieldMapping.deliveryTime] || "" : "";
             const { min: dmin, max: dmax } = parseDeliveryTime(timeStr);
 
-            const valRUBStr = colMap.valueRUB >= 0 ? row[colMap.valueRUB] || "" : "";
-            const valRMBStr = colMap.valueRMB >= 0 ? row[colMap.valueRMB] || "" : "";
+            const valRUBStr = fieldMapping.valueRUB >= 0 ? row[fieldMapping.valueRUB] || "" : "";
+            const valRMBStr = fieldMapping.valueRMB >= 0 ? row[fieldMapping.valueRMB] || "" : "";
             const valRUB = parseValueRange(valRUBStr);
             const valRMB = parseValueRange(valRMBStr);
 
-            const minW = colMap.minWeight >= 0 ? parseFloat(row[colMap.minWeight]) || 0 : 0;
-            const maxW = colMap.maxWeight >= 0 ? parseFloat(row[colMap.maxWeight]) || 999999 : 999999;
+            const minW = fieldMapping.minWeight >= 0 ? parseFloat(row[fieldMapping.minWeight]) || 0 : 0;
+            const maxW = fieldMapping.maxWeight >= 0 ? parseFloat(row[fieldMapping.maxWeight]) || 999999 : 999999;
 
-            const batteryAllowed = colMap.battery >= 0 ? row[colMap.battery]?.includes("允许") || row[colMap.battery]?.toLowerCase().includes("allow") || row[colMap.battery]?.includes("Разрешено") : false;
-            const liquidAllowed = colMap.liquid >= 0 ? row[colMap.liquid]?.includes("允许") || row[colMap.liquid]?.toLowerCase().includes("allow") || row[colMap.liquid]?.includes("Разрешено") : false;
+            const batteryAllowed = fieldMapping.battery >= 0 ? row[fieldMapping.battery]?.includes("允许") || row[fieldMapping.battery]?.toLowerCase().includes("allow") || row[fieldMapping.battery]?.includes("Разрешено") : false;
+            const liquidAllowed = fieldMapping.liquid >= 0 ? row[fieldMapping.liquid]?.includes("允许") || row[fieldMapping.liquid]?.toLowerCase().includes("allow") || row[fieldMapping.liquid]?.includes("Разрешено") : false;
 
-            const billingType = colMap.billingType >= 0 ? row[colMap.billingType]?.trim() || "实际重量" : "实际重量";
+            const billingType = fieldMapping.billingType >= 0 ? row[fieldMapping.billingType]?.trim() || "实际重量" : "实际重量";
 
             // 体积重除数硬编码为 12000（Ozon 标准系数）
             const volDivisor = 12000;
@@ -741,8 +743,8 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             parsed.push({
               id: uniqueId, // 使用唯一标识符
               name,
-              thirdParty: colMap.thirdParty >= 0 ? row[colMap.thirdParty]?.trim() || "" : "",
-              serviceTier: colMap.tier >= 0 ? row[colMap.tier]?.trim() || "" : "",
+              thirdParty: fieldMapping.thirdParty >= 0 ? row[fieldMapping.thirdParty]?.trim() || "" : "",
+              serviceTier: fieldMapping.tier >= 0 ? row[fieldMapping.tier]?.trim() || "" : "",
               serviceLevel,
               fixFee,
               varFeePerGram,
@@ -763,7 +765,7 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
               maxValue: valRMB.max,
               billingType,
               volumetricDivisor: volDivisor,  // 🔴 关键修复：从CSV解析除数
-              ozonRating: colMap.rating >= 0 ? parseFloat(row[colMap.rating]) || 0 : 0,
+              ozonRating: fieldMapping.rating >= 0 ? parseFloat(row[fieldMapping.rating]) || 0 : 0,
               batteryAllowed,
               liquidAllowed,
             });
