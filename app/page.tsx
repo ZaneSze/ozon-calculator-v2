@@ -4,10 +4,16 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { InputPanel } from "@/components/input-panel";
 import { Dashboard } from "@/components/dashboard";
 import { useDataHub } from "@/lib/data-hub-context";
-import { RotateCcw, Truck, Upload, Database, ChevronDown, FileText, Star, Download, Settings, AlertCircle } from "lucide-react";
+import { RotateCcw, Truck, Upload, Database, ChevronDown, FileText, Star, Download, Settings, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -29,7 +35,7 @@ import { calculateShippingCost, parseBillingWeight, getBillingModeDescription } 
 import { PreviewMappingDialog } from "@/components/preview-mapping-dialog";
 import { FieldMapping, ParsedData, smartParseCSV } from "@/lib/smart-parser";
 
-// 默认输入：售价为 RMB（1500 RUB × 0.082 = 123 RMB）
+// 默认输入：售价为 RMB（1500 RUB ÷ 12 = 125 RMB）
 const DEFAULT_INPUT: CalculationInput = {
   primaryCategory: "电子产品",
   secondaryCategory: "电子产品配饰",
@@ -50,9 +56,9 @@ const DEFAULT_INPUT: CalculationInput = {
   cpcEnabled: false,
   cpcBid: 10,
   cpcConversionRate: 3,
-  targetPriceRMB: 123, // RMB（≈1500 RUB）
+  targetPriceRMB: 125, // RMB（≈1500 RUB）
   promotionDiscount: 0,
-  exchangeRate: 0.082, // 1 RUB = 0.082 RMB
+  exchangeRate: 12.0, // 1 CNY = 12 RUB
   withdrawalFee: 1.5,
   exchangeRateBuffer: 0, // 汇率安全缓冲：默认0%
   competitorPriceRMB: 0, // 竞品售价
@@ -182,6 +188,32 @@ export default function Home() {
   
   // 防抖保存的定时器
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 🔹 自动获取汇率
+  const [isFetchingRate, setIsFetchingRate] = useState(false);
+  
+  const fetchExchangeRate = useCallback(async () => {
+    setIsFetchingRate(true);
+    try {
+      const response = await fetch('https://open.er-api.com/v6/latest/RUB');
+      if (!response.ok) throw new Error('汇率API请求失败');
+      const data = await response.json();
+      if (data.rates && data.rates.CNY) {
+        // API返回: 1 RUB = X CNY, 需要转为: 1 CNY = X RUB
+        const rateRUBperCNY = 1 / parseFloat(data.rates.CNY.toFixed(6));
+        setInput(prev => ({ ...prev, exchangeRate: parseFloat(rateRUBperCNY.toFixed(4)) }));
+      }
+    } catch (error) {
+      console.error('获取汇率失败:', error);
+    } finally {
+      setIsFetchingRate(false);
+    }
+  }, []);
+
+  // 组件加载时自动获取汇率
+  useEffect(() => {
+    fetchExchangeRate();
+  }, []);
 
   // 🔹 页面加载时从 localStorage 恢复数据
   useEffect(() => {
@@ -245,8 +277,11 @@ export default function Home() {
 
   // 🔹 计算实际汇率（扣除安全缓冲）
   const effectiveExchangeRate = useMemo(() => {
-    return input.exchangeRate * (1 - input.exchangeRateBuffer / 100);
-  }, [input.exchangeRate, input.exchangeRateBuffer]);
+    // 用户输入表示: 1 CNY = X RUB
+    // 转换为程序内部表示: 1 RUB = (1/X) RMB
+    const rateCNYperRUB = input.exchangeRate;
+    return rateCNYperRUB > 0 ? 1 / rateCNYperRUB : 0.082;
+  }, [input.exchangeRate]);
 
   // 获取可用物流渠道 — 需要将 RMB 转为 RUB 传入（使用实际汇率）
   const shippingChannels = useMemo(() => {
@@ -600,71 +635,157 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* 🔹 吸顶结果栏 - 毛玻璃金融风格 */}
-      <header className="sticky top-0 z-50 w-full bg-gradient-to-b from-white/90 to-white/70 backdrop-blur-md shadow-md border-b border-slate-200/50">
-        <div className="w-full px-4 py-2">
-          <div className="flex items-center justify-between gap-4">
-            {/* 左侧：标题 */}
-            <div className="flex items-center gap-3 shrink-0 max-w-[120px]">
-              <span className="text-base font-bold text-slate-800">📊 Ozon精算</span>
+      {/* 🔹 顶部控制台 - 极致扁平化 */}
+      <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm h-12">
+        {/* 外部容器 */}
+        <div className="w-full px-4 relative flex items-center justify-between h-full">
+          {/* 左侧：品牌标题 */}
+          <div className="flex-shrink-0">
+            <span className="text-xs font-bold text-slate-600">🎯 精算</span>
+          </div>
+          
+          {/* 中间：5个核心指标 - 绝对居中 */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-4 whitespace-nowrap">
+            {/* 净利 */}
+            <div className="flex flex-col items-center -space-y-0.5">
+              <span className={`text-base font-bold ${result.netProfit >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                ¥{result.netProfit.toFixed(1)}
+              </span>
+              <span className="text-[9px] text-slate-400">净利</span>
+            </div>
+            {/* ROI */}
+            <div className="flex flex-col items-center -space-y-0.5">
+              <span className={`text-base font-bold ${result.roi >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                {result.roi.toFixed(1)}%
+              </span>
+              <span className="text-[9px] text-slate-400">ROI</span>
+            </div>
+            {/* 毛利率 */}
+            <div className="flex flex-col items-center -space-y-0.5">
+              <span className={`text-base font-bold ${result.profitMargin >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                {result.profitMargin.toFixed(1)}%
+              </span>
+              <span className="text-[9px] text-slate-400">毛利率</span>
+            </div>
+            {/* 总成本 */}
+            <div className="flex flex-col items-center -space-y-0.5">
+              <span className="text-base font-bold text-slate-700">
+                ¥{result.costs.total.toFixed(1)}
+              </span>
+              <span className="text-[9px] text-slate-400">成本</span>
+            </div>
+            {/* 售价 */}
+            <div className="flex flex-col items-center -space-y-0.5 whitespace-nowrap">
+              <span className="text-base font-bold text-blue-600">
+                ¥{input.targetPriceRMB.toFixed(0)} <span className="text-slate-500 text-xs font-normal">(≈ {Math.round(input.targetPriceRMB * input.exchangeRate).toLocaleString()} ₽)</span>
+              </span>
+              <span className="text-[9px] text-slate-400">售价</span>
+            </div>
+          </div>
+          
+          {/* 右侧：功能聚合 - 扁平紧凑 */}
+          <div className="flex items-center gap-2 w-auto flex-shrink-0 pr-2 ml-auto">
+            {/* 数据管理下拉菜单 */}
+            <div className="relative group">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="flex items-center justify-center h-7 px-2 rounded border border-gray-300 hover:bg-gray-50 text-xs gap-1">
+                      <Settings className="h-3 w-3" />
+                      <span>数据</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent><p className="text-xs">数据管理</p></TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {/* 下拉内容 */}
+              <div className="absolute top-full right-0 mt-1 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 min-w-[140px]">
+                <div className="px-3 py-2 border-b text-xs font-medium text-slate-600">导入</div>
+                <label className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
+                  <Upload className="h-3 w-3 text-blue-600" />
+                  <span>导入佣金表</span>
+                  <input type="file" accept=".csv" className="hidden" onChange={handleCommissionFileUpload} />
+                </label>
+                <label className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
+                  <Truck className="h-3 w-3 text-green-600" />
+                  <span>导入物流表</span>
+                  <input type="file" accept=".csv" className="hidden" onChange={handleShippingFileUpload} />
+                </label>
+                <div className="px-3 py-2 border-t border-b text-xs font-medium text-slate-600">模板</div>
+                <button onClick={() => downloadTemplate("commission")} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">佣金表模板</button>
+                <button onClick={() => downloadTemplate("shipping")} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">物流表模板</button>
+                <div className="px-3 py-2 border-t text-xs font-medium text-slate-600">配置</div>
+                <button onClick={() => exportConfig()} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">导出配置</button>
+                <label className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
+                  <FileText className="h-3 w-3" />
+                  <span>导入配置</span>
+                  <input type="file" accept=".json" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                      try {
+                        const config = JSON.parse(evt.target?.result as string);
+                        if (config.input) {
+                          localStorage.setItem("ozon-calculator-input", config.input);
+                          window.location.reload();
+                        }
+                      } catch (err) { alert(`导入失败: ${err}`); }
+                    };
+                    reader.readAsText(file);
+                  }} />
+                </label>
+              </div>
             </div>
             
-            {/* 中间：5个核心指标 - 全部使用 shrink-0 */}
-            <div className="flex-1 flex items-center justify-center gap-4 overflow-hidden">
-              <div className="flex flex-col items-center shrink-0">
-                <span className="text-[10px] text-slate-500 font-medium">净利</span>
-                <span className={`text-sm font-bold whitespace-nowrap ${result.netProfit >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                  {result.netProfit >= 0 ? "+" : ""}¥{result.netProfit.toFixed(1)}
-                </span>
-              </div>
-              
-              <div className="flex flex-col items-center shrink-0">
-                <span className="text-[10px] text-slate-500 font-medium">ROI</span>
-                <span className={`text-sm font-bold whitespace-nowrap ${result.roi >= 0 ? "text-blue-600" : "text-red-500"}`}>
-                  {result.roi >= 0 ? "+" : ""}{result.roi.toFixed(1)}%
-                </span>
-              </div>
-              
-              <div className="flex flex-col items-center shrink-0">
-                <span className="text-[10px] text-slate-500 font-medium">利润率</span>
-                <span className={`text-sm font-bold whitespace-nowrap ${result.profitMargin >= 0 ? "text-amber-600" : "text-red-500"}`}>
-                  {result.profitMargin >= 0 ? "+" : ""}{result.profitMargin.toFixed(1)}%
-                </span>
-              </div>
-              
-              <div className="flex flex-col items-center shrink-0">
-                <span className="text-[10px] text-slate-500 font-medium">售价₽</span>
-                <span className="text-sm font-bold text-indigo-600 whitespace-nowrap">
-                  {priceRUB.toFixed(0)}₽
-                </span>
-              </div>
-              
-              <div className="flex flex-col items-center shrink-0">
-                <span className="text-[10px] text-slate-500 font-medium">佣金</span>
-                <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
-                  {result.commissionRate.toFixed(0)}%
-                </span>
-              </div>
-              
-              <div className="flex flex-col items-center shrink-0">
-                <span className="text-[10px] text-slate-500 font-medium">运费</span>
-                <span className="text-sm font-bold text-teal-600 whitespace-nowrap">
-                  ¥{result.costs.internationalShipping.toFixed(1)}
-                </span>
-              </div>
-            </div>
-            
-            {/* 右侧：快捷操作 */}
-            <div className="flex items-center gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleReset}
-                className="h-7 px-2 text-xs text-slate-600 border-slate-300 hover:bg-slate-100"
-              >
-                <RotateCcw className="h-3 w-3 mr-1" />
-                重置
+            {/* 汇率设置组 - 扁平紧凑 */}
+            <div className="flex items-center gap-1 bg-slate-100 rounded px-2 h-8 flex-shrink-0">
+              <span className="text-[11px] text-slate-500 whitespace-nowrap">1 CNY =</span>
+              <Input
+                type="number"
+                step="0.001"
+                min="0.001"
+                value={input.exchangeRate}
+                onChange={(e) => setInput(prev => ({ ...prev, exchangeRate: parseFloat(e.target.value) || 12.0 }))}
+                className="w-[70px] h-6 text-xs bg-white px-2"
+              />
+              <span className="text-[10px] text-slate-400">₽</span>
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={fetchExchangeRate} disabled={isFetchingRate} title="获取汇率">
+                <RefreshCw className={`h-3 w-3 ${isFetchingRate ? "animate-spin" : ""}`} />
               </Button>
+              {/* 辅助提示：当前反向换算 */}
+              <div className="flex flex-col -space-y-0.5">
+                <span className="text-[9px] text-slate-400 whitespace-nowrap">1 RUB ≈ {(1/input.exchangeRate).toFixed(4)}¥</span>
+              </div>
+            </div>
+            
+            {/* 提现手续费 - 扁平紧凑 */}
+            <div className="flex items-center gap-1 bg-slate-100 rounded px-2 h-8 flex-shrink-0">
+              <span className="text-[11px] text-slate-500 whitespace-nowrap">提现</span>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                value={input.withdrawalFee}
+                onChange={(e) => setInput(prev => ({ ...prev, withdrawalFee: parseFloat(e.target.value) || 0 }))}
+                className="w-[50px] h-6 text-xs bg-white px-2"
+              />
+              <span className="text-[10px] text-slate-400">%</span>
+            </div>
+            
+            {/* 重置按钮 */}
+            <div className="border-l border-slate-300 pl-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm" onClick={handleReset} className="h-7 w-7 p-0 text-red-600 border-red-300 hover:bg-red-50">
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p className="text-xs">重置全部</p></TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </div>
@@ -672,24 +793,84 @@ export default function Home() {
       
       {/* 🔹 主内容区 - 三栏布局 */}
       <main className="flex-1 container mx-auto px-4 py-3">
-        <div className="grid grid-cols-12 gap-3 h-[calc(100vh-8rem)]">
-          {/* 左侧输入区 30% */}
-          <div className="col-span-4 overflow-y-auto scrollbar-thin">
-            <InputPanel
-              input={input}
-              onInputChange={handleInputChange}
-              currentProfitMargin={result.profitMargin}
-              onReversePriceFromMargin={handleReversePriceFromMargin}
-              marginError={marginError}
-              onReset={handleReset}
-              adRiskControl={result.adRiskControl}
-              shippingData={shippingData}
-              selectedBillingInfo={selectedBillingInfo}
-            />
+        <div className="grid grid-cols-12 gap-3 h-[calc(100vh-5rem)]">
+          {/* 左侧输入区 col-span-3 ≈ 25% */}
+          <div className="col-span-3 flex flex-col gap-3 min-h-0">
+            {/* 输入面板 */}
+            <div className="overflow-y-auto scrollbar-thin">
+              <InputPanel
+                input={input}
+                onInputChange={handleInputChange}
+                currentProfitMargin={result.profitMargin}
+                onReversePriceFromMargin={handleReversePriceFromMargin}
+                marginError={marginError}
+                adRiskControl={result.adRiskControl}
+                shippingData={shippingData}
+                selectedBillingInfo={selectedBillingInfo}
+              />
+            </div>
+            
+            {/* 🔹 警告反馈中心 - 固定高度 h-24 */}
+            <div className="h-24 bg-white rounded-lg border p-3 flex flex-col overflow-hidden">
+              <div className="text-xs font-semibold text-slate-600 mb-2">⚡ 实时状态</div>
+              <div className="flex-1 overflow-y-auto space-y-1">
+                {selectedBillingInfo?.isVolumetric && selectedBillingInfo.billingWeight > selectedBillingInfo.actualWeight ? (
+                  <div className="text-xs text-orange-600 flex items-center gap-1.5 bg-orange-50 p-1.5 rounded">
+                    <AlertCircle className="h-3 w-3" />
+                    <span>⚠️ 计抛预警：计费重 {selectedBillingInfo.billingWeight.toFixed(0)}g (抛重 {selectedBillingInfo.volumetricWeight.toFixed(0)}g &gt; 实重 {selectedBillingInfo.actualWeight.toFixed(0)}g)</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-green-600 flex items-center gap-1.5">
+                    <span>✅</span>
+                    <span>参数符合渠道要求</span>
+                  </div>
+                )}
+                {/* 尺寸超限检测 */}
+                {(() => {
+                  const sumDim = input.length + input.width + input.height;
+                  const maxSide = Math.max(input.length, input.width, input.height);
+                  const exceeded = shippingChannels.available.find(ch => (ch.maxLength && maxSide > ch.maxLength) || (ch.maxSumDimension && sumDim > ch.maxSumDimension));
+                  if (exceeded) {
+                    return (
+                      <div className="text-xs text-red-600 flex items-center gap-1.5 bg-red-50 p-1.5 rounded">
+                        <span>❌</span>
+                        <span>尺寸超限：{exceeded.thirdParty} 限制</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                {/* 重量超限检测 */}
+                {(() => {
+                  const exceeded = shippingChannels.available.find(ch => ch.maxWeight && input.weight > ch.maxWeight);
+                  if (exceeded) {
+                    return (
+                      <div className="text-xs text-red-600 flex items-center gap-1.5 bg-red-50 p-1.5 rounded">
+                        <span>❌</span>
+                        <span>重量超限：{exceeded.thirdParty} 最大 {exceeded.maxWeight}g</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                {/* 货值拦截 */}
+                {shippingChannels.unavailable.filter(ch => ch.reason?.includes('货值')).slice(0, 2).map((ch, i) => (
+                  <div key={i} className="text-xs text-red-600 flex items-center gap-1.5 bg-red-50 p-1.5 rounded">
+                    <span>❌</span>
+                    <span>货值拦截：{ch.thirdParty}</span>
+                  </div>
+                ))}
+                {/* 数据状态 */}
+                <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-2 pt-2 border-t">
+                  <span>📊</span>
+                  <span>佣金表: {commissionFileName || "未加载"} | 物流: {shippingData.length} 条</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* 中间财务看板 35% */}
-          <div className="col-span-4 overflow-y-auto scrollbar-thin">
+          {/* 中间财务看板 col-span-5 ≈ 42% */}
+          <div className="col-span-5 overflow-y-auto scrollbar-thin">
             <Dashboard
               result={result}
               input={input}
@@ -707,121 +888,8 @@ export default function Home() {
             />
           </div>
 
-          {/* 右侧物流列表 35% */}
-          <div className="col-span-4 flex flex-col gap-3 overflow-hidden">
-            {/* 🔹 数据管理抽屉 */}
-            <div className="bg-card rounded-lg border p-3">
-              <div 
-                className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded p-1 -m-1 transition-colors"
-                onClick={() => setDataManagementOpen(!dataManagementOpen)}
-              >
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Database className="h-4 w-4" />
-                  数据管理
-                  {shippingData.length > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
-                      已加载 {shippingData.length} 条
-                    </span>
-                  )}
-                </h3>
-                <ChevronDown className={`h-4 w-4 transition-transform ${dataManagementOpen ? 'rotate-180' : ''}`} />
-              </div>
-              
-              {dataManagementOpen && (
-                <div className="mt-3 space-y-3">
-                  {/* 佣金表上传 */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label className="text-xs text-muted-foreground">佣金表 CSV</Label>
-                      <button
-                        onClick={() => downloadTemplate("commission")}
-                        className="text-[10px] text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                      >
-                        <Download className="h-3 w-3" />
-                        下载模板
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="file"
-                        accept=".csv"
-                        onChange={handleCommissionFileUpload}
-                        className="text-xs h-8"
-                      />
-                    </div>
-                    {commissionFileName && (
-                      <div className="flex items-center gap-1 mt-1 text-[10px] text-green-600">
-                        <FileText className="h-3 w-3" />
-                        <span>{commissionFileName}</span>
-                      </div>
-                    )}
-                  </div>
-                  {/* 物流表上传 */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label className="text-xs text-muted-foreground">物流表 CSV</Label>
-                      <button
-                        onClick={() => downloadTemplate("shipping")}
-                        className="text-[10px] text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                      >
-                        <Download className="h-3 w-3" />
-                        下载模板
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="file"
-                        accept=".csv"
-                        onChange={handleShippingFileUpload}
-                        className="text-xs h-8"
-                      />
-                    </div>
-                    {shippingFileName && (
-                      <div className="flex items-center gap-1 mt-1 text-[10px] text-green-600">
-                        <FileText className="h-3 w-3" />
-                        <span>{shippingFileName}</span>
-                      </div>
-                    )}
-                  </div>
-                  {/* 配置导入导出 */}
-                  <div className="pt-2 border-t">
-                    <Label className="text-xs text-muted-foreground mb-1 block">配置管理</Label>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          try {
-                            importConfig(
-                              () => {
-                                alert("✅ 配置导入成功！页面将刷新...");
-                                window.location.reload();
-                              },
-                              (err) => alert(`❌ 导入失败: ${err}`)
-                            );
-                          } catch (e) {
-                            console.error("导入配置失败:", e);
-                          }
-                        }}
-                        className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-1"
-                      >
-                        <Settings className="h-3 w-3" />
-                        导入配置
-                      </button>
-                      <button
-                        onClick={() => {
-                          exportConfig();
-                          alert("✅ 配置已导出！");
-                        }}
-                        className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-1"
-                      >
-                        <Download className="h-3 w-3" />
-                        导出配置
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            
+          {/* 右侧物流列表 col-span-4 ≈ 33% */}
+          <div className="col-span-4 flex flex-col gap-3 h-[calc(100vh-5rem)] overflow-hidden">
             {/* 物流筛选区 */}
             <div className="bg-card rounded-lg border p-3">
               <div className="flex items-center justify-between mb-2">

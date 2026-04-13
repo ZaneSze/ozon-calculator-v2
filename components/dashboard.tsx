@@ -110,7 +110,7 @@ export function Dashboard({
   sixTierPricing,
   commission,
 }: DashboardProps) {
-  const E = input.exchangeRate; // RMB/RUB
+  const E = input.exchangeRate; // CNY/RUB (1 CNY = X RUB)
 
   // ====== 客户端渲染标记 ======
   const [isClient, setIsClient] = useState(false);
@@ -293,7 +293,7 @@ export function Dashboard({
 
   const formatPriceWithRUB = (rmb: number) => {
     if (!rmb || rmb === Infinity) return "—";
-    const rub = E > 0 ? rmb / E : 0;
+    const rub = E > 0 ? rmb * E : 0;
     return `¥${rmb.toFixed(2)} (≈${Math.ceil(rub)} ₽)`;
   };
 
@@ -472,10 +472,14 @@ export function Dashboard({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-medium cursor-help border border-blue-200">
-                        阶梯详情
+                        阶梯佣金
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-xs">
+                    <TooltipContent 
+                      side="top" 
+                      sideOffset={8}
+                      className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3"
+                    >
                       <div className="space-y-1 text-xs">
                         <p className="font-semibold">佣金阶梯费率</p>
                         {commission.tiers.map((tier, i) => {
@@ -504,7 +508,7 @@ export function Dashboard({
                 ¥{result.netProfit.toFixed(2)}
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                {E > 0 ? `≈${(result.netProfit / E).toFixed(0)} ₽` : ""}
+                {E > 0 ? `≈${(result.netProfit * E).toFixed(0)} ₽` : ""}
               </div>
             </div>
             <div className="text-center p-4 rounded-xl bg-gradient-to-br from-muted/40 to-muted/10 border">
@@ -521,62 +525,60 @@ export function Dashboard({
             </div>
           </div>
 
-          {/* 成本结构环形图 */}
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={costChartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                  labelLine={true}
-                >
-                  {costChartData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COST_COLORS[index % COST_COLORS.length]} />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  formatter={(value) => `¥${Number(value).toFixed(2)}`}
-                  contentStyle={{ fontSize: 12 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* 成本明细 */}
-          <div className="mt-4 space-y-2 text-sm">
-            <div className="flex justify-between items-center p-2 rounded bg-muted/30">
-              <span className="text-muted-foreground">采购 + 头程 + 包装</span>
-              <span className="font-medium">¥{(result.costs.purchase + result.costs.domesticShipping + result.costs.packaging).toFixed(2)}</span>
+          {/* 成本结构环形图 - 外围百分比常显 */}
+          <div className="h-64 flex items-center">
+            <div className="w-1/2 h-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={costChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={45}
+                    outerRadius={65}
+                    paddingAngle={2}
+                    dataKey="value"
+                    labelLine={true}
+                    label={({ percent }) => `${((percent ?? 0) * 100).toFixed(1)}%`}
+                    isAnimationActive={true}
+                  >
+                    {costChartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COST_COLORS[index % COST_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    formatter={(value, name) => [`¥${Number(value).toFixed(2)}`, name]}
+                    contentStyle={{ fontSize: 12 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
-            <div className="flex justify-between items-center p-2 rounded bg-muted/30">
-              <span className="text-muted-foreground">跨境运费</span>
-              <span className="font-medium">¥{result.costs.internationalShipping.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center p-2 rounded bg-orange-50/60 border border-orange-100">
-              <span className="text-muted-foreground">平台佣金 <span className="text-orange-600 font-semibold">({result.commissionRate}%)</span></span>
-              <span className="font-medium">¥{result.costs.commission.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center p-2 rounded bg-muted/30">
-              <span className="text-muted-foreground">提现手续费</span>
-              <span className="font-medium">¥{result.costs.withdrawalFee.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center p-2 rounded bg-muted/30">
-              <span className="text-muted-foreground">广告费 (CPA+CPC)</span>
-              <span className="font-medium">¥{(result.costs.cpaCost + result.costs.cpcCost).toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center p-2 rounded bg-muted/30">
-              <span className="text-muted-foreground">退货损耗</span>
-              <span className="font-medium">¥{result.costs.returnCost.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center p-2.5 rounded-lg bg-muted/60 border font-semibold">
-              <span>总成本</span>
-              <span>¥{result.costs.total.toFixed(2)}</span>
+            {/* 侧边图例 - 带颜色块 + 动态文字增强 */}
+            <div className="w-1/2 pl-4 space-y-1">
+              <div className="text-xs text-muted-foreground mb-2">单位: ¥</div>
+              {costChartData.map((item, index) => {
+                // 动态文字增强
+                let enhancedName = item.name;
+                if (item.name === "平台佣金") {
+                  enhancedName = `平台佣金 (${result.commissionRate}%)`;
+                } else if (item.name === "提现手续费") {
+                  enhancedName = `提现手续费 (${input.withdrawalFee.toFixed(1)}%)`;
+                }
+                
+                return (
+                  <div key={index} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COST_COLORS[index % COST_COLORS.length] }} />
+                      <span className="text-slate-600">{enhancedName}</span>
+                    </div>
+                    <span className="font-medium text-slate-700">{item.value.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+              <div className="flex items-center justify-between text-xs pt-2 border-t font-semibold">
+                <span className="text-slate-600">总成本</span>
+                <span className="text-slate-800">{result.costs.total.toFixed(2)}</span>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -625,8 +627,8 @@ export function Dashboard({
                       <div className={`text-lg font-bold ${colors.text} mt-1`}>
                         ¥{tier.priceRMB.toFixed(2)}
                       </div>
-                      <div className={`text-xs ${colors.text} opacity-70`}>
-                        ≈{tier.priceRUB} ₽
+                      <div className={`text-xs text-slate-500 mt-0.5`}>
+                        ≈{tier.priceRUB.toLocaleString()} ₽
                       </div>
                     </>
                   )}

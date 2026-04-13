@@ -23,6 +23,18 @@ import { Slider } from "@/components/ui/slider";
 import { useDataHub } from "@/lib/data-hub-context";
 import { CalculationInput, ShippingChannel } from "@/lib/types";
 
+/**
+ * 🔹 全局汇率转换准则 (Exchange Rate Conversion Rules)
+ * ========================================================
+ * 定义: exchangeRate = 1 人民币可以兑换多少卢布 (例如: 12.0)
+ * 
+ * 方向 A: 人民币 ➔ 卢布 (CNY → RUB): val * exchangeRate
+ * 方向 B: 卢布 ➔ 人民币 (RUB → CNY): val / exchangeRate
+ * 
+ * 禁止: 任何反向逻辑 (如 val / exchangeRate 用于 CNY→RUB)
+ * ========================================================
+ */
+
 // 🔹 计费信息类型（用于计抛预警同步）
 interface BillingInfo {
   mode: string;
@@ -123,83 +135,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
 
   return (
     <div className="space-y-5 overflow-y-auto max-h-[calc(100vh-6rem)] pr-1 scrollbar-thin">
-      {/* 一键重置按钮 - 右上角显眼位置 */}
-      {onReset && (
-        <div className="flex justify-end">
-          <button
-            onClick={onReset}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 border border-red-200 hover:bg-red-50 rounded transition-colors"
-            title="重置所有输入为默认值"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            一键重置
-          </button>
-        </div>
-      )}
-      
-      {/* 🔹 模块 0：汇率与结算设置 - 严禁删除！ */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <DollarSign className="h-4 w-4" />
-            汇率与结算设置
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {/* 卢布汇率 + 提现费 */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5 col-span-2">
-              <Label className="text-xs">卢布汇率 (1 RUB = X RMB)</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.0001"
-                value={input.exchangeRate || ""}
-                onChange={(e) => updateField("exchangeRate", parseFloat(e.target.value) || 0)}
-                className="h-9 text-sm"
-                placeholder="0.082"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">提现手续费 (%)</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.1"
-                value={input.withdrawalFee || ""}
-                onChange={(e) => updateField("withdrawalFee", parseFloat(e.target.value) || 0)}
-                className="h-9 text-sm"
-                placeholder="1.5%"
-              />
-            </div>
-          </div>
-          {/* 汇率安全垫 */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">汇率安全垫</Label>
-              <span className="text-xs text-muted-foreground">{input.exchangeRateBuffer}%</span>
-            </div>
-            <Slider
-              value={[input.exchangeRateBuffer || 0]}
-              onValueChange={(v) => updateField("exchangeRateBuffer", v[0])}
-              max={20}
-              step={0.5}
-              className="w-full"
-            />
-            <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span>0%</span>
-              <span>10%</span>
-              <span>20%</span>
-            </div>
-            {input.exchangeRateBuffer > 0 && (
-              <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
-                实际汇率: 1 RUB = {(input.exchangeRate * (1 - input.exchangeRateBuffer / 100)).toFixed(4)} RMB
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-      
+
       {/* 模块 A：商品参数与物流拦截 */}
       <Card>
         <CardHeader className="pb-3">
@@ -327,73 +263,33 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             )}
           </div>
           
-          {/* 🔹 商品属性开关 */}
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className={`flex flex-col p-3 rounded-lg border-2 transition-all ${
-              input.hasBattery 
-                ? "bg-amber-50 border-amber-300 shadow-sm" 
-                : "bg-muted/30 border-border"
-            }`}>
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2">
-                  <Battery className={`h-4 w-4 ${input.hasBattery ? "text-amber-600" : "text-muted-foreground"}`} />
-                  <Label className="text-xs font-medium cursor-pointer">
-                    带电商品
-                  </Label>
-                </div>
-                <Switch
-                  checked={input.hasBattery || false}
-                  onCheckedChange={(checked) => updateField("hasBattery", checked)}
-                  className="data-[state=checked]:bg-amber-500"
-                />
-              </div>
-              {/* 🔹 功能依赖提示 */}
-              {!hasBatteryMapping && (
-                <div className="flex items-start gap-1 text-[10px] text-gray-500 mt-1">
-                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                  <span>物流表未提供电池限制数据，无法自动过滤</span>
-                </div>
-              )}
-              {hasBatteryMapping && (
-                <div className="flex items-center gap-1 text-[10px] text-green-600 mt-1">
-                  <CheckCircle2 className="h-3 w-3" />
-                  <span>✓ 支持自动过滤禁电渠道</span>
-                </div>
-              )}
-            </div>
+          {/* 🔹 商品属性开关 - 微型图标按钮组 */}
+          <div className="flex gap-2 pt-1">
+            {/* 带电按钮 - 微型 */}
+            <button
+              onClick={() => updateField("hasBattery", !input.hasBattery)}
+              className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-all h-7 ${
+                input.hasBattery 
+                  ? "bg-orange-100 border-orange-400 text-orange-700" 
+                  : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100"
+              }`}
+            >
+              <span>{input.hasBattery ? "⚡" : "🚫"}</span>
+              <span>{input.hasBattery ? "带电" : "不带电"}</span>
+            </button>
             
-            <div className={`flex flex-col p-3 rounded-lg border-2 transition-all ${
-              input.hasLiquid 
-                ? "bg-blue-50 border-blue-300 shadow-sm" 
-                : "bg-muted/30 border-border"
-            }`}>
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2">
-                  <Droplets className={`h-4 w-4 ${input.hasLiquid ? "text-blue-600" : "text-muted-foreground"}`} />
-                  <Label className="text-xs font-medium cursor-pointer">
-                    带液体商品
-                  </Label>
-                </div>
-                <Switch
-                  checked={input.hasLiquid || false}
-                  onCheckedChange={(checked) => updateField("hasLiquid", checked)}
-                  className="data-[state=checked]:bg-blue-500"
-                />
-              </div>
-              {/* 🔹 功能依赖提示 */}
-              {!hasLiquidMapping && (
-                <div className="flex items-start gap-1 text-[10px] text-gray-500 mt-1">
-                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                  <span>物流表未提供液体限制数据，无法自动过滤</span>
-                </div>
-              )}
-              {hasLiquidMapping && (
-                <div className="flex items-center gap-1 text-[10px] text-green-600 mt-1">
-                  <CheckCircle2 className="h-3 w-3" />
-                  <span>✓ 支持自动过滤禁液体渠道</span>
-                </div>
-              )}
-            </div>
+            {/* 带液按钮 - 微型 */}
+            <button
+              onClick={() => updateField("hasLiquid", !input.hasLiquid)}
+              className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-all h-7 ${
+                input.hasLiquid 
+                  ? "bg-blue-100 border-blue-400 text-blue-700" 
+                  : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100"
+              }`}
+            >
+              <span>{input.hasLiquid ? "💧" : "🚫"}</span>
+              <span>{input.hasLiquid ? "带液" : "不带液"}</span>
+            </button>
           </div>
         </CardContent>
       </Card>
@@ -409,7 +305,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
         <CardContent className="space-y-3">
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">采购成本 (¥)</Label>
+              <Label className="text-xs">采购成本</Label>
               <Input
                 type="number"
                 min="0"
@@ -420,7 +316,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">国内头程 (¥)</Label>
+              <Label className="text-xs">国内头程</Label>
               <Input
                 type="number"
                 min="0"
@@ -431,7 +327,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">包装杂费 (¥)</Label>
+              <Label className="text-xs">包装杂费</Label>
               <Input
                 type="number"
                 min="0"
@@ -447,7 +343,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             <Label className="text-xs font-medium">退货损耗沙盘</Label>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">预期退货率 (%)</Label>
+                <Label className="text-xs text-muted-foreground">预期退货率</Label>
                 <Input
                   type="number"
                   min="0"
@@ -545,7 +441,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             <div className={`transition-opacity ${input.cpcEnabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">单次竞价 (₽)</Label>
+                  <Label className="text-xs text-muted-foreground">单次竞价</Label>
                   <Input
                     type="number"
                     min="0"
@@ -557,7 +453,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">转化率 CVR (%)</Label>
+                  <Label className="text-xs text-muted-foreground">转化率 CVR</Label>
                   <Input
                     type="number"
                     min="0"
@@ -646,7 +542,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
           <div className="grid grid-cols-3 gap-3">
             {/* RMB 售价 */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">前台售价 (¥ RMB)</Label>
+              <Label className="text-xs font-medium">前台售价 (RMB)</Label>
               <div className="relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">¥</span>
                 <Input
@@ -669,7 +565,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             </div>
             {/* RUB 售价 */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">前台售价 (₽ RUB)</Label>
+              <Label className="text-xs font-medium">前台售价 (RUB)</Label>
               <div className="relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">₽</span>
                 <Input
@@ -678,7 +574,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
                   step="1"
                   value={
                     input.targetPriceRMB > 0 && input.exchangeRate > 0
-                      ? parseFloat((input.targetPriceRMB / input.exchangeRate).toFixed(2))
+                      ? parseFloat((input.targetPriceRMB * input.exchangeRate).toFixed(2))
                       : ""
                   }
                   onChange={(e) => {
@@ -687,7 +583,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
                       updateField("targetPriceRMB", 0);
                     } else {
                       const rubValue = parseFloat(val) || 0;
-                      const rmbValue = rubValue * input.exchangeRate;
+                      const rmbValue = rubValue / input.exchangeRate;
                       updateField("targetPriceRMB", parseFloat(rmbValue.toFixed(4)));
                     }
                   }}
@@ -698,7 +594,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             </div>
             {/* 目标利润率 */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">目标利润率 (%)</Label>
+              <Label className="text-xs font-medium">目标利润率</Label>
               <div className="relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">%</span>
                 <Input
@@ -735,7 +631,7 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">预留大促折扣 (%)</Label>
+            <Label className="text-xs">预留大促折扣</Label>
             <Input
               type="number"
               min="0"
