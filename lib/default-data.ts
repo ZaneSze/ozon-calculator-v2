@@ -1713,7 +1713,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -1740,7 +1740,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -1767,7 +1767,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -1794,7 +1794,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -1821,7 +1821,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -1848,7 +1848,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 6,
     "batteryAllowed": false,
     "liquidAllowed": true
@@ -1875,7 +1875,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -1902,7 +1902,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -1929,7 +1929,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -1956,7 +1956,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -1983,7 +1983,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2010,7 +2010,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2037,7 +2037,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 7,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2064,7 +2064,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2091,7 +2091,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2118,7 +2118,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 10,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -2145,7 +2145,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2172,7 +2172,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2199,7 +2199,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2226,7 +2226,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2253,7 +2253,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2280,7 +2280,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2307,7 +2307,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2334,7 +2334,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2361,7 +2361,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2388,7 +2388,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -2415,7 +2415,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -2442,7 +2442,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -2469,7 +2469,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2496,7 +2496,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -2523,7 +2523,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2550,7 +2550,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2577,7 +2577,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2604,7 +2604,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2631,7 +2631,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2658,7 +2658,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2685,7 +2685,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2712,7 +2712,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2739,7 +2739,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2766,7 +2766,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2793,7 +2793,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 11,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -2820,7 +2820,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2847,7 +2847,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2874,7 +2874,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2901,7 +2901,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2928,7 +2928,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -2955,7 +2955,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -2982,7 +2982,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3009,7 +3009,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3036,7 +3036,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3063,7 +3063,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 135,
     "maxValue": 20,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 10,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3090,7 +3090,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3117,7 +3117,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3144,7 +3144,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3171,7 +3171,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3198,7 +3198,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3225,7 +3225,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 6,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3252,7 +3252,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 7,
     "batteryAllowed": false,
     "liquidAllowed": true
@@ -3279,7 +3279,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3306,7 +3306,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3333,7 +3333,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3360,7 +3360,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3387,7 +3387,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3414,7 +3414,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3441,7 +3441,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -3468,7 +3468,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3495,7 +3495,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -3522,7 +3522,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -3549,7 +3549,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 11,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3576,7 +3576,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3603,7 +3603,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3630,7 +3630,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -3657,7 +3657,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 2,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -3684,7 +3684,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3711,7 +3711,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3738,7 +3738,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -3765,7 +3765,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -3792,7 +3792,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3819,7 +3819,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 10,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3846,7 +3846,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 11,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -3873,7 +3873,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -3900,7 +3900,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3927,7 +3927,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3954,7 +3954,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -3981,7 +3981,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4008,7 +4008,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4035,7 +4035,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4062,7 +4062,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 7,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -4089,7 +4089,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4116,7 +4116,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4143,7 +4143,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4170,7 +4170,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4197,7 +4197,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4224,7 +4224,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4251,7 +4251,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4278,7 +4278,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -4305,7 +4305,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 6,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4332,7 +4332,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 635,
     "maxValue": 90,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 7,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4359,7 +4359,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -4386,7 +4386,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -4413,7 +4413,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -4440,7 +4440,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -4467,7 +4467,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -4494,7 +4494,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 6,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -4521,7 +4521,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 7,
     "batteryAllowed": false,
     "liquidAllowed": true
@@ -4548,7 +4548,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4575,7 +4575,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4602,7 +4602,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4629,7 +4629,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4656,7 +4656,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4683,7 +4683,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4710,7 +4710,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4737,7 +4737,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4764,7 +4764,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4791,7 +4791,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4818,7 +4818,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4845,7 +4845,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4872,7 +4872,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -4899,7 +4899,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 4,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4926,7 +4926,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4953,7 +4953,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -4980,7 +4980,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -5007,7 +5007,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 5,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -5034,7 +5034,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 9,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -5061,7 +5061,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 10,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5088,7 +5088,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": false,
     "liquidAllowed": false
@@ -5115,7 +5115,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5142,7 +5142,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5169,7 +5169,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -5196,7 +5196,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5223,7 +5223,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5250,7 +5250,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -5277,7 +5277,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 7,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5304,7 +5304,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -5331,7 +5331,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5358,7 +5358,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 1,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -5385,7 +5385,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -5412,7 +5412,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5439,7 +5439,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5466,7 +5466,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": false
@@ -5493,7 +5493,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 3,
     "batteryAllowed": true,
     "liquidAllowed": true
@@ -5520,7 +5520,7 @@ export const DEFAULT_SHIPPING_DATA: ShippingChannel[] = [
     "maxValueRUB": 22,
     "maxValue": 3,
     "billingType": "实际重量",
-    "volumetricDivisor": 0,
+    "volumetricDivisor": 12000,
     "ozonRating": 8,
     "batteryAllowed": true,
     "liquidAllowed": false

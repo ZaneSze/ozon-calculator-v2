@@ -33,7 +33,9 @@ export interface ShippingChannel {
   deliveryTimeMax: number;         // 最长时效 (天)
   deliveryTime: number;            // 预计平均时效 (天) = (min+max)/2
   maxValueRUB: number;             // 最大货值限制 (RUB)
+  minValueRUB?: number;             // 最小货值限制 (RUB) - 评分组货值区间下限
   maxValue: number;                // 最大货值限制 (RMB)
+  minValue?: number;               // 最小货值限制 (RMB)
   billingType: string;             // 计费类型 (实际重量/体积重量)
   volumetricDivisor: number;       // 体积重量除数 (如 5000, 6000 等, 0 表示不适用)
   ozonRating: number;              // Ozon评级

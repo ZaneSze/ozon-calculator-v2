@@ -287,21 +287,28 @@ function parseShippingRateString(rateStr: string): { fixFee: number; varFeePerGr
 
 /**
  * 解析尺寸限制字符串
- * 格式示例: "边长总和 ≤ 90 cm, 长边 ≤ 60 cm"
+ * 格式示例: "边长总和 ≤ 90 cm, 长边 ≤ 60 cm", "总和少于90", "长边<60"
  * 返回 { maxSum, maxLength }
  */
 function parseDimensionString(dimStr: string): { maxSum: number; maxLength: number } {
-  const result = { maxSum: 999, maxLength: 999 };
+  const result = { maxSum: Infinity, maxLength: Infinity };
 
   if (!dimStr || dimStr.trim() === "") return result;
 
-  // 🔹 中文：边长总和限制
+  // 🔹 中文：边长总和限制（兼容 ≤, <=, <, 少于, 不超过）
   const sumPatterns = [
-    /边长总和\s*[≤<=]\s*(\d+)/,
-    /尺寸总和\s*[≤<=]\s*(\d+)/,
-    /三边总和\s*[≤<=]\s*(\d+)/,
-    /总尺寸\s*[≤<=]\s*(\d+)/,
-    /总和\s*[≤<=]\s*(\d+)/,
+    /边长总和\s*[≤<]\s*(\d+)/,
+    /边长总和\s*(?:少于|不超过)\s*(\d+)/,
+    /尺寸总和\s*[≤<]\s*(\d+)/,
+    /尺寸总和\s*(?:少于|不超过)\s*(\d+)/,
+    /三边总和\s*[≤<]\s*(\d+)/,
+    /三边总和\s*(?:少于|不超过)\s*(\d+)/,
+    /总尺寸\s*[≤<]\s*(\d+)/,
+    /总尺寸\s*(?:少于|不超过)\s*(\d+)/,
+    /总和\s*[≤<]\s*(\d+)/,
+    /总和\s*(?:少于|不超过)\s*(\d+)/,
+    /sum\s*[≤<]\s*(\d+)/i,
+    /сумма\s*[≤<]\s*(\d+)/i,
   ];
   
   for (const pattern of sumPatterns) {
@@ -312,12 +319,18 @@ function parseDimensionString(dimStr: string): { maxSum: number; maxLength: numb
     }
   }
 
-  // 🔹 中文：长边限制
+  // 🔹 中文：长边限制（兼容 ≤, <=, <, 少于, 不超过）
   const lengthPatterns = [
-    /长边\s*[≤<=]\s*(\d+)/,
-    /最长边\s*[≤<=]\s*(\d+)/,
-    /最大边\s*[≤<=]\s*(\d+)/,
-    /长度\s*[≤<=]\s*(\d+)/,
+    /长边\s*[≤<]\s*(\d+)/,
+    /长边\s*(?:少于|不超过)\s*(\d+)/,
+    /最长边\s*[≤<]\s*(\d+)/,
+    /最长边\s*(?:少于|不超过)\s*(\d+)/,
+    /最大边\s*[≤<]\s*(\d+)/,
+    /最大边\s*(?:少于|不超过)\s*(\d+)/,
+    /长度\s*[≤<]\s*(\d+)/,
+    /长度\s*(?:少于|不超过)\s*(\d+)/,
+    /(?:max\s*)?length\s*[≤<]\s*(\d+)/i,
+    /длин[аы]?\s*[≤<]\s*(\d+)/i,
   ];
   
   for (const pattern of lengthPatterns) {
@@ -328,30 +341,8 @@ function parseDimensionString(dimStr: string): { maxSum: number; maxLength: numb
     }
   }
 
-  // 🔹 英文备选
-  const sumMatchEn = dimStr.match(/sum\s*[≤<=]\s*(\d+)/i);
-  if (sumMatchEn) {
-    result.maxSum = parseInt(sumMatchEn[1]);
-  }
-
-  const lengthMatchEn = dimStr.match(/(?:max\s*)?length\s*[≤<=]\s*(\d+)/i);
-  if (lengthMatchEn) {
-    result.maxLength = parseInt(lengthMatchEn[1]);
-  }
-  
-  // 🔹 俄文备选
-  const sumMatchRu = dimStr.match(/сумма\s*[≤<=]\s*(\d+)/i);
-  if (sumMatchRu) {
-    result.maxSum = parseInt(sumMatchRu[1]);
-  }
-
-  const lengthMatchRu = dimStr.match(/длин[аы]?\s*[≤<=]\s*(\d+)/i);
-  if (lengthMatchRu) {
-    result.maxLength = parseInt(lengthMatchRu[1]);
-  }
-
   // 🔹 打印解析结果
-  if (result.maxSum !== 999 || result.maxLength !== 999) {
+  if (result.maxSum !== Infinity || result.maxLength !== Infinity) {
     console.log(`📏 尺寸解析: "${dimStr}" → 总和限${result.maxSum}cm / 长边限${result.maxLength}cm`);
   }
 
@@ -360,7 +351,7 @@ function parseDimensionString(dimStr: string): { maxSum: number; maxLength: numb
 
 /**
  * 解析货值限制字符串
- * 格式示例: "1 - 1500" 或 "0.01 - 135"
+ * 格式示例: "1 - 1500", "0.01 - 135", "1 501 - 7,000" (带千分位空格)
  * 返回 { min, max }
  */
 function parseValueRange(valStr: string): { min: number; max: number } {
@@ -368,12 +359,15 @@ function parseValueRange(valStr: string): { min: number; max: number } {
     return { min: 0, max: 999999 };
   }
 
-  const match = valStr.match(/([\d.]+)\s*[-–—]\s*([\d.]+)/);
+  // 🔹 关键修复：先移除所有空格和逗号（处理 Ozon 千分位格式 "1 501 - 7,000"）
+  const cleanStr = valStr.replace(/\s/g, "").replace(/,/g, "");
+
+  const match = cleanStr.match(/([\d.]+)\s*[-–—]\s*([\d.]+)/);
   if (match) {
     return { min: parseFloat(match[1]), max: parseFloat(match[2]) };
   }
 
-  const singleNum = valStr.match(/([\d.]+)/);
+  const singleNum = cleanStr.match(/([\d.]+)/);
   if (singleNum) {
     return { min: 0, max: parseFloat(singleNum[1]) };
   }
@@ -492,9 +486,18 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
         if (savedShipping) {
           const parsed = JSON.parse(savedShipping);
           if (Array.isArray(parsed) && parsed.length > 0) {
+            // 🔴 强制修复：如果 volumetricDivisor < 1000，重写为 12000
+            const fixedParsed = parsed.map((item: ShippingChannel) => {
+              if (item.volumetricDivisor !== undefined && item.volumetricDivisor < 1000) {
+                console.log(`[数据中心] 修复渠道 ${item.name} 的 volumetricDivisor: ${item.volumetricDivisor} → 12000`);
+                return { ...item, volumetricDivisor: 12000 };
+              }
+              return item;
+            });
+            
             // 检查并修复重复ID
             const idSet = new Set<string>();
-            const hasDuplicates = parsed.some((item: ShippingChannel) => {
+            const hasDuplicates = fixedParsed.some((item: ShippingChannel) => {
               if (idSet.has(item.id)) return true;
               idSet.add(item.id);
               return false;
@@ -506,8 +509,16 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
               setShippingData(DEFAULT_SHIPPING_DATA);
               console.log("[数据中心] 已恢复默认物流数据");
             } else {
-              setShippingData(parsed);
-              console.log(`[数据中心] 从 localStorage 恢复 ${parsed.length} 条物流数据`);
+              setShippingData(fixedParsed);
+              // 如果有修复，更新 localStorage
+              const hasFixed = fixedParsed.some((item: ShippingChannel, i: number) => 
+                item.volumetricDivisor !== parsed[i].volumetricDivisor
+              );
+              if (hasFixed) {
+                localStorage.setItem("ozon_shipping_data", JSON.stringify(fixedParsed));
+                console.log("[数据中心] 已修复并保存 volumetricDivisor 数据");
+              }
+              console.log(`[数据中心] 从 localStorage 恢复 ${fixedParsed.length} 条物流数据`);
             }
           }
         }
@@ -723,6 +734,9 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
 
             const billingType = colMap.billingType >= 0 ? row[colMap.billingType]?.trim() || "实际重量" : "实际重量";
 
+            // 体积重除数硬编码为 12000（Ozon 标准系数）
+            const volDivisor = 12000;
+
             idx++;
             parsed.push({
               id: uniqueId, // 使用唯一标识符
@@ -743,10 +757,12 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
               deliveryTimeMin: dmin,
               deliveryTimeMax: dmax,
               deliveryTime: Math.round((dmin + dmax) / 2),
+              minValueRUB: valRUB.min > 0 ? valRUB.min : undefined,  // 🔴 关键修复：添加最小货值
               maxValueRUB: valRUB.max,
+              minValue: valRMB.min > 0 ? valRMB.min : undefined,
               maxValue: valRMB.max,
               billingType,
-              volumetricDivisor: 0,
+              volumetricDivisor: volDivisor,  // 🔴 关键修复：从CSV解析除数
               ozonRating: colMap.rating >= 0 ? parseFloat(row[colMap.rating]) || 0 : 0,
               batteryAllowed,
               liquidAllowed,
@@ -1035,8 +1051,21 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
         
         // 维度一：货值拦截 (Value Limit) - 仅当启用时
         if (interceptionConfig.maxValueRUB !== false) {
+          const channelMinValueRMB = channel.minValueRUB ? channel.minValueRUB * exchangeRate : 0;
           const channelMaxValueRMB = channel.maxValueRUB ? channel.maxValueRUB * exchangeRate : channel.maxValue;
-          if (priceRMB > channelMaxValueRMB) {
+          
+          // 检查货值下限（评分组匹配）
+          if (channel.minValueRUB && priceRUB < channel.minValueRUB) {
+            reasons.push(`❌ 评分组货值不符 (当前 ${Math.round(priceRUB)}₽ 不在 ${channel.minValueRUB}-${channel.maxValueRUB}₽ 范围内)`);
+            interceptionReasons.push({
+              dimension: "货值",
+              code: "VALUE_TOO_LOW",
+              message: `商品售价低于评分组货值下限`,
+              details: `当前 ${priceRUB.toFixed(0)}₽ 不在 ${channel.minValueRUB}-${channel.maxValueRUB}₽ 范围内`
+            });
+          }
+          // 检查货值上限
+          else if (priceRMB > channelMaxValueRMB) {
             reasons.push(`🚫 货值拦截: ¥${priceRMB.toFixed(0)} > ¥${channelMaxValueRMB.toFixed(0)} (渠道上限)`);
             interceptionReasons.push({
               dimension: "货值",
@@ -1222,24 +1251,30 @@ function calculateChannelVolumetricWeight(
 /**
  * 解析物流渠道的体积重除数
  * 从 volumetricDivisor 字段获取，或从 billingType 解析除数
+ * 强制兜底：如果解析结果 < 1000，一定是错了，强制回退到 12000
  */
 function parseVolumetricDivisor(channel: ShippingChannel): number {
-  // 如果 channel 有 volumetricDivisor 字段，直接使用
-  if (channel.volumetricDivisor && channel.volumetricDivisor > 0) {
-    return channel.volumetricDivisor;
+  // 🔴 修复：移除空格后再检查，防止 "12 000" 被截断为 12
+  const cleanDivisor = String(channel.volumetricDivisor || "").replace(/[\s,]/g, "");
+  const parsedFromField = parseInt(cleanDivisor) || 0;
+  
+  if (parsedFromField >= 1000) {
+    return parsedFromField;
   }
   
   // 否则尝试从 billingType 解析除数
   const billingType = channel.billingType || "";
+  const cleanBillingType = billingType.replace(/[\s,]/g, "");  // 移除空格
   
   // 常见除数模式匹配
   const divisorPatterns = [
-    /\/(\d+)/,           // /12000, /6000, /5000
+    /÷(\d+)/,           // ÷12000
+    /\/(\d+)/,           // /12000
     /(\d{4,5})/,        // 12000, 6000, 5000
   ];
   
   for (const pattern of divisorPatterns) {
-    const match = billingType.match(pattern);
+    const match = cleanBillingType.match(pattern);
     if (match) {
       const divisor = parseInt(match[1]);
       if (divisor >= 1000 && divisor <= 20000) {
@@ -1248,7 +1283,7 @@ function parseVolumetricDivisor(channel: ShippingChannel): number {
     }
   }
   
-  // 默认值
+  // 🔴 强制兜底：默认 12000
   return 12000;
 }
 
@@ -1280,11 +1315,16 @@ export function parseBillingWeight(
   const billingTypeRaw = channel.billingType || "实际重量";
   const divisor = parseVolumetricDivisor(channel);
   
-  // 计算体积重
-  const volumetricWeight = calculateChannelVolumetricWeight(length, width, height, divisor);
+  // 🔴 安全检查：如果除数异常（< 1000），强制使用 12000
+  const safeDivisor = divisor < 1000 ? 12000 : divisor;
+  
+  // 计算体积重 (g)
+  const volumetricWeight = ((length * width * height) / safeDivisor) * 1000;
+  
+  // 🔴 关键修复：实时判定计抛，使用 Math.round 防止浮点误差
+  const isActuallyVolumetric = Math.round(volumetricWeight) > Math.round(actualWeight);
   
   // 根据计费类型确定计费重量
-  // 优先级: 最大/取大 > 体积 > 实际
   let billingWeight: number;
   let isVolumetric: boolean;
   let billingTypeDesc: string;
@@ -1298,11 +1338,10 @@ export function parseBillingWeight(
   ) {
     // 最大/取大: 取实重和体积重的最大值
     billingWeight = Math.max(actualWeight, volumetricWeight);
-    isVolumetric = volumetricWeight > actualWeight;
+    isVolumetric = isActuallyVolumetric;  // 🔴 使用实时判定
     billingTypeDesc = "取大";
   } else if (
     normalizedBillingType.includes("体积") && 
-    !normalizedBillingType.includes("实际") &&
     !normalizedBillingType.includes("实际")
   ) {
     // 纯体积: 只按体积重计费
@@ -1321,7 +1360,7 @@ export function parseBillingWeight(
   } else {
     // 默认行为: 取大
     billingWeight = Math.max(actualWeight, volumetricWeight);
-    isVolumetric = volumetricWeight > actualWeight;
+    isVolumetric = isActuallyVolumetric;  // 🔴 使用实时判定
     billingTypeDesc = "取大";
   }
   
@@ -1330,7 +1369,7 @@ export function parseBillingWeight(
     actualWeight,
     volumetricWeight,
     isVolumetric,
-    divisor,
+    divisor: safeDivisor,
     billingType: billingTypeDesc,
   };
 }
@@ -1355,7 +1394,7 @@ export function getBillingModeDescription(channel: ShippingChannel): string {
 
 /**
  * 计算物流费用（RMB）
- * 支持 Ozon 真实费率格式: fixFee + varFeePerGram × 计费重量(g)
+ * 严格执行单位转换: pricePerKg / 1000 = 每克单价
  * 
  * @param channel 物流渠道
  * @param chargeableWeight 计费重量 (g) - 由调用方根据计费类型计算
@@ -1368,12 +1407,22 @@ export function calculateShippingCost(
   height?: number,
   actualWeight?: number
 ): number {
+  // 🔴 关键修复：直接使用 varFeePerGram（每克运费），不转换
+  const varFeePerGram = channel.varFeePerGram;
+  
   // 如果提供了尺寸和实际重量，说明调用方需要体积重计算
   if (length !== undefined && width !== undefined && height !== undefined && actualWeight !== undefined) {
     const { billingWeight } = parseBillingWeight(channel, length, width, height, actualWeight);
-    return channel.fixFee + channel.varFeePerGram * billingWeight;
+    return channel.fixFee + varFeePerGram * billingWeight;
   }
   
   // 兼容旧调用方式：直接使用传入的重量作为计费重量
-  return channel.fixFee + channel.varFeePerGram * chargeableWeight;
+  return channel.fixFee + varFeePerGram * chargeableWeight;
+}
+
+/**
+ * 获取每克单价（用于UI显示）
+ */
+export function getPricePerGram(channel: ShippingChannel): number {
+  return channel.varFeePerGram;
 }

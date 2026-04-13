@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { InputPanel } from "@/components/input-panel";
 import { Dashboard } from "@/components/dashboard";
+import { LogisticsCard } from "@/components/logistics-card";
 import { useDataHub } from "@/lib/data-hub-context";
 import { RotateCcw, Truck, Upload, Database, ChevronDown, FileText, Star, Download, Settings, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -71,24 +72,6 @@ const DEFAULT_INPUT: CalculationInput = {
 // localStorage 键名
 const STORAGE_KEY = "ozon-calculator-input";
 const CONFIG_EXPORT_KEY = "ozon-calculator-config";
-
-// 🔹 工具函数：渲染 Ozon 星级评分
-function renderOzonRating(rating: number) {
-  if (!rating || rating <= 0) return null;
-  const fullStars = Math.floor(rating);
-  const hasHalfStar = rating % 1 >= 0.5;
-  return (
-    <div className="flex items-center gap-0.5">
-      {[...Array(5)].map((_, i) => (
-        <Star
-          key={i}
-          className={`h-3 w-3 ${i < fullStars ? "fill-amber-400 text-amber-400" : i === fullStars && hasHalfStar ? "fill-amber-400/50 text-amber-400" : "text-gray-300"}`}
-        />
-      ))}
-      <span className="text-[10px] text-amber-600 ml-0.5">{rating.toFixed(1)}</span>
-    </div>
-  );
-}
 
 // 🔹 工具函数：检查渠道是否支持体积重计费
 function supportsVolumetricBilling(channel: ShippingChannel): boolean {
@@ -1001,161 +984,25 @@ export default function Home() {
                 </div>
               )}
               
-              {/* 可用渠道 */}
+              {/* 可用渠道 - 高密度信息卡片 */}
               {shippingChannels.available.slice(0, 10).map((channel) => {
                 const cost = channelCosts.get(channel.id) ?? 0;
                 const billing = channelBillingInfo.get(channel.id);
                 const isSelected = selectedChannel?.id === channel.id;
-                const mode = billing?.mode || "取大";
                 const hasVolumetricBilling = supportsVolumetricBilling(channel);
                 const showVolumetricWarning = hasVolumetricBilling && billing?.isVolumetric;
                 const divisor = billing?.divisor || 12000;
-                const weightPerGram = channel.varFeePerGram;
-                const billingWeight = billing?.billingWeight || channel.maxWeight;
-                const variableCost = weightPerGram * billingWeight;
                 
                 return (
-                  <div
+                  <LogisticsCard
                     key={channel.id}
+                    channel={channel}
+                    cost={cost}
+                    billing={billing}
+                    isSelected={isSelected}
                     onClick={() => handleSelectChannel(channel)}
-                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all relative ${
-                      isSelected 
-                        ? "bg-blue-50 border-blue-500 shadow-lg ring-4 ring-blue-200" 
-                        : "bg-white border-gray-200 hover:border-blue-300 hover:shadow-md"
-                    }`}
-                  >
-                    {/* 🔹 选中徽章 - 右上角 */}
-                    {isSelected && (
-                      <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                        已选
-                      </div>
-                    )}
-                    {/* 物流身份标题 */}
-                    <div className="flex items-start justify-between mb-2 pb-2 border-b border-gray-100">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm font-bold ${isSelected ? "text-blue-700" : "text-slate-800"}`}>{channel.thirdParty}</span>
-                          <span className="text-slate-400">-</span>
-                          <span className={`text-sm font-semibold ${isSelected ? "text-blue-600" : "text-slate-700"}`}>{channel.name}</span>
-                        </div>
-                        {/* 服务评级 */}
-                        <div className="flex items-center gap-2 mt-1">
-                          {renderOzonRating(channel.ozonRating)}
-                          {channel.ozonRating > 0 && (
-                            <span className="text-[10px] text-slate-500">Ozon评级</span>
-                          )}
-                        </div>
-                      </div>
-                      {/* 官方时效 */}
-                      <div className="shrink-0 ml-2 text-right">
-                        <div className="text-xs text-slate-600">⏱️ 时效</div>
-                        <div className={`text-sm font-bold ${
-                          channel.deliveryTimeMax <= 15 ? "text-green-600" :
-                          channel.deliveryTimeMax <= 25 ? "text-amber-600" :
-                          "text-slate-600"
-                        }`}>
-                          {channel.deliveryTimeMin}-{channel.deliveryTimeMax}天
-                        </div>
-                        {/* 🔹 总运费 - 选中时更醒目 */}
-                        <div className={`text-lg font-black mt-1 ${
-                          isSelected ? "text-blue-600" : "text-teal-600"
-                        }`}>
-                          ¥{cost.toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* 计费模式标签 */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                        showVolumetricWarning 
-                          ? "bg-purple-600 text-white animate-pulse" 
-                          : mode === "取大"
-                            ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white"
-                            : "bg-slate-500 text-white"
-                      }`}>
-                        {showVolumetricWarning ? "⚠️ 计抛预警" : mode === "取大" ? "⚖️ 取大模式" : "⚖️ 实重模式"}
-                      </span>
-                      {hasVolumetricBilling && (
-                        <span className="text-[10px] text-slate-500">系数: {divisor}</span>
-                      )}
-                    </div>
-                    
-                    {/* 重量对比（核心） */}
-                    <div className="bg-gradient-to-r from-slate-50 to-purple-50 rounded-lg p-2.5 space-y-1.5">
-                      {/* 实重 */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-slate-600 flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                          实重 (Actual)
-                        </span>
-                        <span className="text-sm font-bold text-slate-800">{billing?.actualWeight.toFixed(0) || 0} g</span>
-                      </div>
-                      
-                      {/* 抛重 */}
-                      <div className="flex items-center justify-between">
-                        <span className={`text-[11px] flex items-center gap-1 ${
-                          hasVolumetricBilling ? "text-purple-600" : "text-slate-600"
-                        }`}>
-                          <span className={`w-2 h-2 rounded-full ${hasVolumetricBilling ? "bg-purple-500" : "bg-slate-400"}`}></span>
-                          抛重 (Volumetric)
-                        </span>
-                        <div className="text-right">
-                          <span className={`text-sm font-bold ${hasVolumetricBilling ? "text-purple-600" : "text-slate-800"}`}>
-                            {billing?.volumetricWeight.toFixed(0) || 0} g
-                          </span>
-                          {hasVolumetricBilling && (
-                            <div className="text-[9px] text-slate-400">
-                              {input.length}×{input.width}×{input.height} / {divisor} × 1000
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* 计费重 - 仅在触发计抛时高亮显示 */}
-                      {showVolumetricWarning && (
-                        <div className="flex items-center justify-between pt-1.5 border-t-2 border-purple-300 mt-1.5 bg-purple-100 -mx-2 px-2 py-1 rounded">
-                          <span className="text-[11px] text-purple-700 font-bold flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
-                            计费重 (Billing)
-                          </span>
-                          <span className="text-sm font-bold text-purple-700 bg-purple-200 px-2 py-0.5 rounded animate-pulse">
-                            {billing?.billingWeight.toFixed(0)} g [抛重计费]
-                          </span>
-                        </div>
-                      )}
-                      {!showVolumetricWarning && billing && (
-                        <div className="flex items-center justify-between pt-1.5 border-t border-gray-200 mt-1.5">
-                          <span className="text-[11px] text-slate-500 font-medium">计费重</span>
-                          <span className="text-sm font-bold text-slate-700">
-                            {billing.billingWeight.toFixed(0)} g [实重计费]
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* 计费公式透明化 */}
-                    <div className="mt-2 pt-2 border-t border-gray-100">
-                      <div className="text-[10px] text-slate-500 mb-1">计费公式：</div>
-                      <div className={`rounded p-2 ${isSelected ? "bg-blue-50 border border-blue-200" : "bg-teal-50"}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`text-sm font-bold ${isSelected ? "text-blue-700" : "text-teal-700"}`}>
-                            ¥{cost.toFixed(2)}
-                          </span>
-                          <span className={`text-[11px] ${isSelected ? "text-blue-600" : "text-teal-600"}`}>
-                            = ¥{channel.fixFee.toFixed(2)} + ({billingWeight.toFixed(0)}g × ¥{weightPerGram.toFixed(4)})
-                          </span>
-                        </div>
-                        <div className={`flex items-center justify-between text-[10px] mt-1 ${isSelected ? "text-blue-500" : "text-slate-500"}`}>
-                          <span>固定费 + 续重费</span>
-                          <span>¥{channel.fixFee.toFixed(2)} + ¥{variableCost.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    input={input}
+                  />
                 );
               })}
               
