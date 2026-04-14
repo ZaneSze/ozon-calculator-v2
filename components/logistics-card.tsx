@@ -215,7 +215,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
               length: input.length,
               width: input.width,
               height: input.height,
-              priceRUB: input.priceRUB,
+              priceRUB: input.targetPriceRMB / input.exchangeRate,
             }}
             interceptionReasons={[]}
             isAvailable={true}
