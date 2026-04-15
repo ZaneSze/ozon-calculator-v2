@@ -159,6 +159,9 @@ export default function Home() {
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [marginError, setMarginError] = useState<string | null>(null);
   const [lockedChannelId, setLockedChannelId] = useState<string | null>(null); // 🔹 物流商锁定状态
+  const [showAllAvailable, setShowAllAvailable] = useState(false); // 🔹 显示全部可用渠道
+  const [showAllUnavailable, setShowAllUnavailable] = useState(false); // 🔹 显示全部不可用渠道
+  const [sortMode, setSortMode] = useState<'cost' | 'time' | 'rating'>('cost'); // 🔹 推荐物流排序模式
   const [dataManagementOpen, setDataManagementOpen] = useState(false); // 🔹 数据管理抽屉状态
   const [commissionFileName, setCommissionFileName] = useState<string>("");
   const [shippingFileName, setShippingFileName] = useState<string>("");
@@ -289,6 +292,8 @@ export default function Home() {
       input.designatedProvider // 🔹 传入指定物流商
     );
   }, [getShippingChannels, input.length, input.width, input.height, input.weight, input.targetPriceRMB, effectiveExchangeRate, input.hasBattery, input.hasLiquid, input.designatedProvider]);
+
+  // 🔹 推荐物流排序：按费用/时效/评分排序（定义在 channelCosts 之后，见下方）
 
   // 默认选中价格最优渠道（如果已锁定，则使用锁定的渠道）
   const selectedChannel = useMemo(() => {
@@ -672,6 +677,35 @@ export default function Home() {
     return channelBillingInfo.get(selectedChannel.id) || null;
   }, [selectedChannel, channelBillingInfo]);
 
+  // 🔹 推荐物流排序：按费用/时效/评分排序
+  const sortedAvailableChannels = useMemo(() => {
+    const channels = [...shippingChannels.available];
+    switch (sortMode) {
+      case 'cost':
+        // 按运费从低到高排序
+        channels.sort((a, b) => {
+          const costA = channelCosts.get(a.id) ?? Infinity;
+          const costB = channelCosts.get(b.id) ?? Infinity;
+          return costA - costB;
+        });
+        break;
+      case 'time':
+        // 按时效从快到慢排序（deliveryTime 越小越快）
+        channels.sort((a, b) => a.deliveryTime - b.deliveryTime);
+        break;
+      case 'rating':
+        // 按评分从高到低排序
+        channels.sort((a, b) => (b.ozonRating || 0) - (a.ozonRating || 0));
+        break;
+    }
+    return channels;
+  }, [shippingChannels.available, sortMode, channelCosts]);
+
+  // 🔹 不可用渠道排序：统一按名称排序
+  const sortedUnavailableChannels = useMemo(() => {
+    return [...shippingChannels.unavailable].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+  }, [shippingChannels.unavailable]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* 🔹 顶部控制台 - 极致扁平化 */}
@@ -1002,20 +1036,43 @@ export default function Home() {
                 </span>
               </div>
               {/* 物流下拉筛选 */}
-              <Select 
-                value={input.designatedProvider || "全部"} 
-                onValueChange={(value) => handleInputChange({ ...input, designatedProvider: value === "全部" ? "" : value })}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="全部物流商" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="全部">全部物流商</SelectItem>
-                  {[...new Set(shippingData.map(ch => ch.thirdParty).filter(Boolean))].sort().map(provider => (
-                    <SelectItem key={provider} value={provider}>{provider}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select 
+                  value={input.designatedProvider || "全部"} 
+                  onValueChange={(value) => handleInputChange({ ...input, designatedProvider: value === "全部" ? "" : value })}
+                >
+                  <SelectTrigger className="h-8 text-xs flex-1">
+                    <SelectValue placeholder="全部物流商" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="全部">全部物流商</SelectItem>
+                    {[...new Set(shippingData.map(ch => ch.thirdParty).filter(Boolean))].sort().map(provider => (
+                      <SelectItem key={provider} value={provider}>{provider}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* 🔹 推荐排序切换 */}
+              <div className="flex items-center gap-1 mt-2">
+                <span className="text-[10px] text-slate-400 mr-1">推荐:</span>
+                {[
+                  { key: 'cost' as const, label: '按费用', icon: '💰' },
+                  { key: 'time' as const, label: '按时效', icon: '⏱' },
+                  { key: 'rating' as const, label: '按评分', icon: '⭐' },
+                ].map(({ key, label, icon }) => (
+                  <button
+                    key={key}
+                    onClick={() => setSortMode(key)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                      sortMode === key
+                        ? 'bg-blue-500 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {icon} {label}
+                  </button>
+                ))}
+              </div>
             </div>
             
             {/* 🔹 唯一物流列表（唯一物流模块） */}
@@ -1026,14 +1083,16 @@ export default function Home() {
                   <div className="flex items-center gap-2">
                     <span className="text-blue-600">💡</span>
                     <span className="text-blue-700">
-                      根据您的商品属性，已为您智能推荐最省钱的前 <strong>{Math.min(shippingChannels.available.length, 5)}</strong> 条渠道
+                      根据您的商品属性，已为您
+                      {sortMode === 'cost' ? '按费用推荐' : sortMode === 'time' ? '按时效推荐' : '按评分推荐'}
+                      ，前 <strong>{Math.min(shippingChannels.available.length, 10)}</strong> 条渠道
                     </span>
                   </div>
                 </div>
               )}
               
               {/* 可用渠道 - 高密度信息卡片 */}
-              {shippingChannels.available.slice(0, 10).map((channel) => {
+              {sortedAvailableChannels.slice(0, showAllAvailable ? undefined : 10).map((channel) => {
                 const cost = channelCosts.get(channel.id) ?? 0;
                 const billing = channelBillingInfo.get(channel.id);
                 const isSelected = selectedChannel?.id === channel.id;
@@ -1054,6 +1113,20 @@ export default function Home() {
                 );
               })}
               
+              {/* 🔹 可用渠道查看更多/收起 */}
+              {shippingChannels.available.length > 10 && (
+                <button
+                  onClick={() => setShowAllAvailable(!showAllAvailable)}
+                  className="w-full py-2 text-xs text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center gap-1"
+                >
+                  {showAllAvailable ? (
+                    <>收起渠道</>
+                  ) : (
+                    <>查看全部 {shippingChannels.available.length} 条可用渠道</>
+                  )}
+                </button>
+              )}
+              
               {/* 不可用渠道（灰色卡片 + 红色拦截原因，下沉底部） */}
               {shippingChannels.unavailable.length > 0 && (
                 <div className="mt-4 pt-4 border-t-2 border-dashed border-slate-300">
@@ -1062,7 +1135,7 @@ export default function Home() {
                     不可用渠道 ({shippingChannels.unavailable.length})
                   </div>
                   <div className="space-y-2">
-                    {shippingChannels.unavailable.slice(0, 5).map((channel) => (
+                    {sortedUnavailableChannels.slice(0, showAllUnavailable ? undefined : 5).map((channel) => (
                       <div key={channel.id} className="p-3 rounded-lg bg-slate-100/60 border border-slate-200 opacity-60 hover:opacity-80 transition-opacity">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex-1 min-w-0">
@@ -1078,10 +1151,18 @@ export default function Home() {
                         </div>
                       </div>
                     ))}
+                    {/* 🔹 不可用渠道查看更多/收起 */}
                     {shippingChannels.unavailable.length > 5 && (
-                      <div className="text-xs text-slate-400 text-center py-1">
-                        还有 {shippingChannels.unavailable.length - 5} 个不可用渠道...
-                      </div>
+                      <button
+                        onClick={() => setShowAllUnavailable(!showAllUnavailable)}
+                        className="w-full py-2 text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-center gap-1"
+                      >
+                        {showAllUnavailable ? (
+                          <>收起不可用渠道</>
+                        ) : (
+                          <>查看全部 {shippingChannels.unavailable.length} 条不可用渠道</>
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>
