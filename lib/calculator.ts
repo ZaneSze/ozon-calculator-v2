@@ -1265,9 +1265,10 @@ export function performFullCalculation(
   console.log(`总固定成本: ${totalFixedCost.toFixed(2)} RMB`);
   console.log(`总成本: ${(totalFixedCost + commissionAmount + withdrawalFeeAmount + cpaCost).toFixed(2)} RMB`);
 
-  // ROI
-  const totalInvestment = input.purchaseCost + input.domesticShipping + input.packagingFee + internationalShipping;
-  const roi = totalInvestment > 0 ? (netProfit / totalInvestment) * 100 : 0;
+  // ROI（投资回报率）= 净利润 ÷ 总成本 × 100%
+  // 总成本包含所有实际支出（采购+头程+包装+跨境运费+佣金+提现手续费+广告+退货损耗）
+  const totalCost = totalFixedCost + commissionAmount + withdrawalFeeAmount + cpaCost;
+  const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
 
   // 销售利润率 = 净利润 / 收入(P_rmb)
   const profitMargin = priceRMB > 0 ? (netProfit / priceRMB) * 100 : 0;
