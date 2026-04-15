@@ -332,22 +332,10 @@ export default function Home() {
       setInput((prev) => ({ ...prev, targetPriceRMB: reverseResult.priceRMB }));
     }
   }, [
-    // 🔹 监听所有影响成本和利润率的参数（排除售价本身，避免循环）
+    // 🔹 监听总成本变化 — 任何影响成本的参数变化都会导致 total 变化
+    // 同时监听佣金和物流渠道，因为它们影响计算路径但可能不即时反映在 total 中
     lockedMargin,
-    effectiveInput.purchaseCost,
-    effectiveInput.domesticShipping,
-    effectiveInput.packagingFee,
-    effectiveInput.returnRate,
-    effectiveInput.returnHandling,
-    effectiveInput.exchangeRate,
-    effectiveInput.withdrawalFee,
-    effectiveInput.cpaEnabled,
-    effectiveInput.cpaRate,
-    effectiveInput.cpcEnabled,
-    effectiveInput.cpcBid,
-    effectiveInput.cpcConversionRate,
-    effectiveInput.promotionDiscount,
-    effectiveInput.multiItemCount,
+    result.costs.total,
     commission,
     selectedChannel,
   ]);

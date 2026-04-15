@@ -637,71 +637,61 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             </div>
             {/* 目标利润率 */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">目标利润率</Label>
-              <div className="relative flex items-center gap-1">
-                <div className="relative flex-1">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">%</span>
-                  <Input
-                    type="number"
-                    min="-99"
-                    max="99"
-                    step="1"
-                    value={targetMarginInput}
-                    onChange={(e) => {
-                      if (lockedMargin !== null) return; // 🔹 锁定时禁止编辑
-                      const val = e.target.value;
-                      setTargetMarginInput(val); // 更新本地状态
-                      
-                      // 🔹 设置输入源标记，防止售价更新后再次触发利润率同步
-                      isUpdatingFromMargin.current = true;
-                      
-                      if (val === "" || val === "-") {
-                        // 空值或负号，不触发计算
-                      } else {
-                        const targetMargin = parseFloat(val);
-                        if (onReversePriceFromMargin && !isNaN(targetMargin)) {
-                          onReversePriceFromMargin(targetMargin);
-                        }
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={onToggleMarginLock}
+                      className={`flex items-center gap-1 text-xs font-medium transition-colors cursor-pointer select-none ${
+                        lockedMargin !== null ? "text-amber-600" : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      {lockedMargin !== null ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                      <span>目标利润率</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={8} className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3">
+                    <p className="text-xs text-slate-600">
+                      {lockedMargin !== null 
+                        ? "锁定中 — 更改成本时售价将自动调整以维持该利润率，点击解锁" 
+                        : "点击锁定利润率，锁定后更改成本将自动调整售价"}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">%</span>
+                <Input
+                  type="number"
+                  min="-99"
+                  max="99"
+                  step="1"
+                  value={targetMarginInput}
+                  onChange={(e) => {
+                    if (lockedMargin !== null) return; // 🔹 锁定时禁止编辑
+                    const val = e.target.value;
+                    setTargetMarginInput(val); // 更新本地状态
+                    
+                    // 🔹 设置输入源标记，防止售价更新后再次触发利润率同步
+                    isUpdatingFromMargin.current = true;
+                    
+                    if (val === "" || val === "-") {
+                      // 空值或负号，不触发计算
+                    } else {
+                      const targetMargin = parseFloat(val);
+                      if (onReversePriceFromMargin && !isNaN(targetMargin)) {
+                        onReversePriceFromMargin(targetMargin);
                       }
-                    }}
-                    className={`h-9 text-sm pl-6 ${marginError ? "border-red-400 focus-visible:ring-red-400" : ""} ${lockedMargin !== null ? "bg-slate-50 cursor-not-allowed opacity-80" : ""}`}
-                    placeholder="0"
-                    disabled={lockedMargin !== null}
-                  />
-                </div>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={onToggleMarginLock}
-                        className={`flex-shrink-0 h-9 w-9 flex items-center justify-center rounded-md border transition-all ${
-                          lockedMargin !== null
-                            ? "bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100"
-                            : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                        }`}
-                      >
-                        {lockedMargin !== null ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={8} className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3">
-                      <p className="text-xs text-slate-600">
-                        {lockedMargin !== null 
-                          ? `利润率已锁定为 ${lockedMargin.toFixed(1)}%，点击解锁；更改成本时售价将自动调整以维持该利润率` 
-                          : "点击锁定当前利润率，锁定后更改成本将自动调整售价"}
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                    }
+                  }}
+                  className={`h-9 text-sm pl-6 ${marginError ? "border-red-400 focus-visible:ring-red-400" : ""} ${lockedMargin !== null ? "bg-amber-50/50 cursor-not-allowed" : ""}`}
+                  placeholder="0"
+                  disabled={lockedMargin !== null}
+                />
               </div>
-              {lockedMargin !== null && (
-                <div className="text-[10px] text-amber-600 font-medium flex items-center gap-1">
-                  <Lock className="h-2.5 w-2.5" />
-                  <span>利润率锁定 {lockedMargin.toFixed(1)}%（改成本自动调售价）</span>
-                </div>
-              )}
               {marginError && (
-                <div className="text-[10px] text-red-600 font-medium mt-1 p-1.5 rounded bg-red-50 border border-red-200">
+                <div className="text-[10px] text-red-600 font-medium p-1.5 rounded bg-red-50 border border-red-200">
                   {marginError}
                 </div>
               )}
