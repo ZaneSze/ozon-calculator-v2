@@ -174,8 +174,8 @@ export default function Home() {
   
   // 🔹 自动获取汇率
   const [isFetchingRate, setIsFetchingRate] = useState(false);
-  // 🔹 利润率锁定状态
-  const [marginLocked, setMarginLocked] = useState(false);
+  // 🔹 利润率锁定状态：null=未锁定, 数字=锁定的利润率值(%)
+  const [lockedMargin, setLockedMargin] = useState<number | null>(null);
   
   const fetchExchangeRate = useCallback(async () => {
     setIsFetchingRate(true);
@@ -217,9 +217,9 @@ export default function Home() {
       }
 
       // 🔹 恢复利润率锁定状态
-      const savedMarginLocked = localStorage.getItem("ozon-margin-locked");
-      if (savedMarginLocked === "true") {
-        setMarginLocked(true);
+      const savedLockedMargin = localStorage.getItem("ozon-locked-margin");
+      if (savedLockedMargin !== null) {
+        setLockedMargin(parseFloat(savedLockedMargin));
       }
     } catch (error) {
       console.error("Failed to load saved data:", error);
@@ -318,6 +318,39 @@ export default function Home() {
     () => performFullCalculation(effectiveInput, commission, selectedChannel),
     [effectiveInput, commission, selectedChannel]
   );
+  
+  // 🔹 利润率锁定时：成本变化自动反推售价
+  useEffect(() => {
+    if (lockedMargin === null || !commission) return;
+    
+    const reverseResult = reversePriceFromMargin(lockedMargin, effectiveInput, commission, selectedChannel || undefined);
+    
+    if (reverseResult.error) {
+      setMarginError(reverseResult.error);
+    } else if (reverseResult.priceRMB > 0) {
+      setMarginError(null);
+      setInput((prev) => ({ ...prev, targetPriceRMB: reverseResult.priceRMB }));
+    }
+  }, [
+    // 🔹 监听所有影响成本和利润率的参数（排除售价本身，避免循环）
+    lockedMargin,
+    effectiveInput.purchaseCost,
+    effectiveInput.domesticShipping,
+    effectiveInput.packagingFee,
+    effectiveInput.returnRate,
+    effectiveInput.returnHandling,
+    effectiveInput.exchangeRate,
+    effectiveInput.withdrawalFee,
+    effectiveInput.cpaEnabled,
+    effectiveInput.cpaRate,
+    effectiveInput.cpcEnabled,
+    effectiveInput.cpcBid,
+    effectiveInput.cpcConversionRate,
+    effectiveInput.promotionDiscount,
+    effectiveInput.multiItemCount,
+    commission,
+    selectedChannel,
+  ]);
   
   // 🔹 监控佣金阶梯变化
   useEffect(() => {
@@ -433,14 +466,20 @@ export default function Home() {
     }
   }, [marginError, input.targetPriceRMB]);
 
-  // 🔹 利润率锁定切换
+  // 🔹 利润率锁定切换：锁定当前利润率，或解锁
   const handleToggleMarginLock = useCallback(() => {
-    setMarginLocked((prev) => {
-      const next = !prev;
-      localStorage.setItem("ozon-margin-locked", String(next));
-      return next;
+    setLockedMargin((prev) => {
+      if (prev !== null) {
+        // 解锁
+        localStorage.removeItem("ozon-locked-margin");
+        return null;
+      }
+      // 锁定当前利润率
+      const currentMargin = result.profitMargin;
+      localStorage.setItem("ozon-locked-margin", String(currentMargin));
+      return currentMargin;
     });
-  }, []);
+  }, [result.profitMargin]);
 
   // 🔹 一键重置功能（彻底化：清除所有状态）
   // 🔹 全局重置函数：物理+逻辑+存储三重重置
@@ -464,7 +503,7 @@ export default function Home() {
     setSelectedChannelId(null);
     setMarginError(null);
     setLockedChannelId(null);
-    setMarginLocked(false);
+    setLockedMargin(null);
     
     // ===== 2. 持久化存储清理 =====
     console.log("  [2/4] 清除 localStorage...");
@@ -472,7 +511,7 @@ export default function Home() {
     // 清除输入数据
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem("ozon-locked-channel");
-    localStorage.removeItem("ozon-margin-locked");
+    localStorage.removeItem("ozon-locked-margin");
     
     // 清除数据中心缓存
     localStorage.removeItem("ozon_commission_data");
@@ -936,7 +975,7 @@ export default function Home() {
                 adRiskControl={result.adRiskControl}
                 shippingData={shippingData}
                 selectedBillingInfo={selectedBillingInfo}
-                marginLocked={marginLocked}
+                lockedMargin={lockedMargin}
                 onToggleMarginLock={handleToggleMarginLock}
               />
             </div>
