@@ -441,16 +441,19 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             <div className={`transition-opacity ${input.cpcEnabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">单次竞价</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={input.cpcBid || ""}
-                    onChange={(e) => updateField("cpcBid", parseFloat(e.target.value) || 0)}
-                    className="h-8 text-sm"
-                    disabled={!input.cpcEnabled}
-                  />
+                  <Label className="text-xs text-muted-foreground">单次竞价 (₽)</Label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">₽</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={input.cpcBid || ""}
+                      onChange={(e) => updateField("cpcBid", parseFloat(e.target.value) || 0)}
+                      className="h-8 text-sm pl-6"
+                      disabled={!input.cpcEnabled}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">转化率 CVR</Label>
@@ -473,20 +476,20 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
                       <TooltipTrigger asChild>
                         <span className="cursor-help font-medium">单均转化成本</span>
                       </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs">
+                      <TooltipContent side="top" sideOffset={8} className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3">
                         <div className="space-y-1">
                           <p className="font-medium text-sm">单均转化成本 / Cost Per Conversion</p>
-                          <p className="text-xs text-muted-foreground">
-                            每获得一个订单所需的广告花费。计算公式：单次竞价 ÷ 转化率
+                          <p className="text-xs text-slate-600">
+                            每获得一个订单所需的广告花费（卢布）。计算公式：单次竞价(₽) ÷ 转化率，再折算为人民币
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            The advertising cost required to acquire one order. Formula: CPC Bid ÷ Conversion Rate
+                          <p className="text-xs text-slate-600">
+                            The advertising cost per order (in RUB). Formula: CPC Bid(₽) ÷ Conversion Rate, then convert to CNY
                           </p>
                         </div>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <span>: ¥{((input.cpcBid / (input.cpcConversionRate / 100)) * input.exchangeRate).toFixed(2)}</span>
+                  <span>: ₽{(input.cpcBid / (input.cpcConversionRate / 100)).toFixed(2)} (≈¥{(input.cpcBid / (input.cpcConversionRate / 100) / input.exchangeRate).toFixed(2)})</span>
                 </div>
               )}
             </div>
@@ -497,11 +500,45 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
               {/* 保本 ACOS 显示 */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">保本 ACOS:</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-muted-foreground cursor-help">保本 ACOS:</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={8} className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3">
+                      <div className="space-y-1">
+                        <p className="font-medium text-sm">保本 ACOS / Break-Even ACOS</p>
+                        <p className="text-xs text-slate-600">
+                          广告支出占销售额的最高安全比例。当 ACOS ≤ 保本 ACOS 时，广告花费可控；超过则每单亏损。
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          计算公式：(售价 - 总成本 + 广告费) ÷ 售价 × 100%
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <span className="font-medium">{adRiskControl.breakEvenACOS.toFixed(1)}%</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">当前 ACOS:</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={`text-muted-foreground cursor-help`}>当前 ACOS:</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={8} className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3">
+                      <div className="space-y-1">
+                        <p className="font-medium text-sm">当前 ACOS / Current ACOS</p>
+                        <p className="text-xs text-slate-600">
+                          实际广告支出占销售额的比例。ACOS 越低，广告效率越高。
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          计算公式：单均广告成本 ÷ 售价 × 100%
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <span className={`font-medium ${adRiskControl.isOverBudget ? 'text-red-600' : ''}`}>
                   {adRiskControl.currentACOS.toFixed(1)}%
                 </span>
