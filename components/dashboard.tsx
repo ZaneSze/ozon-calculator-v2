@@ -192,7 +192,6 @@ export function Dashboard({
     // 🔹 计算总成本验证
     const chartTotal = data.reduce((sum, item) => sum + item.value, 0);
     const costTotal = result.costs.total;
-    console.log(`[成本结构] 饼状图总和: ${chartTotal.toFixed(2)}, 实际总成本: ${costTotal.toFixed(2)}`);
     
     return data;
   }, [result.costs]);

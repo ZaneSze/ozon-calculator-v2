@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { CategoryCommission, ShippingChannel, UnavailableShippingChannel, ShippingInterceptionReason } from "./types";
@@ -88,8 +88,6 @@ function findCommissionHeaderRow(rows: string[][]): number {
  * 查找包含 "Тариф" 或 "tariff" 或 "rate" 或 "%" 和阶梯区间关键字的列
  */
 function findCommissionTierColumns(headers: string[]): { tier1: number; tier2: number; tier3: number } {
-  console.log("[佣金列识别] 表头列表:", headers);
-  
   let tier1 = -1, tier2 = -1, tier3 = -1;
   
   // 🔹 策略1：精确匹配阶梯关键词
@@ -100,54 +98,50 @@ function findCommissionTierColumns(headers: string[]): { tier1: number; tier2: n
     // 第一阶梯：0-1500 RUB
     if (tier1 === -1) {
       // 🔹 优化匹配：支持 "0 - 1500", "0-1500", "<1500" 等格式
-      if ((h.includes("0") && h.includes("1500") && h.includes("rfbs")) || 
-          h.includes("tier1") || 
-          h.includes("c1") ||
-          h.includes("<1500") ||
-          h.includes("до 1500") ||
-          h.includes("до 1500 руб") ||
-          (h.includes("rfbs") && h.includes("0") && h.includes("1500") && !h.includes("1500.01") && !h.includes("5000"))) {
+if ((h.includes("0") && h.includes("1500") && h.includes("rfbs")) || 
+           h.includes("tier1") || 
+           h.includes("c1") ||
+           h.includes("<1500") ||
+           h.includes("до 1500") ||
+           h.includes("до 1500 руб") ||
+           (h.includes("rfbs") && h.includes("0") && h.includes("1500") && !h.includes("1500.01") && !h.includes("5000"))) {
         tier1 = i;
-        console.log(`  ✓ 找到 tier1 列 [${i}]: ${originalH}`);
       }
     }
     
     // 第二阶梯：1500-5000 RUB
     if (tier2 === -1) {
       // 🔹 优化匹配：支持 "1500.01 - 5000", "1500-5000" 等格式
-      if ((h.includes("1500") && h.includes("5000") && h.includes("rfbs") && !h.includes("5000.01")) || 
-          h.includes("tier2") || 
-          h.includes("c2") ||
-          (h.includes("1500") && h.includes("5000") && !h.includes("5000.01") && !h.includes("0 - 1500")) ||
-          h.includes("от 1500") ||
-          h.includes("1500-5000 руб") ||
-          h.includes("1500.01")) {
+if ((h.includes("1500") && h.includes("5000") && h.includes("rfbs") && !h.includes("5000.01")) || 
+           h.includes("tier2") || 
+           h.includes("c2") ||
+           (h.includes("1500") && h.includes("5000") && !h.includes("5000.01") && !h.includes("0 - 1500")) ||
+           h.includes("от 1500") ||
+           h.includes("1500-5000 руб") ||
+           h.includes("1500.01")) {
         tier2 = i;
-        console.log(`  ✓ 找到 tier2 列 [${i}]: ${originalH}`);
       }
     }
     
     // 第三阶梯：>5000 RUB
     if (tier3 === -1) {
       // 🔹 优化匹配：支持 "5000.01+", ">5000", "5000+" 等格式
-      if ((h.includes("5000") && (h.includes("+") || h.includes("plus") || h.includes(">") || h.includes(".01+"))) || 
-          h.includes("tier3") || 
-          h.includes("c3") ||
-          h.includes(">5000") ||
-          h.includes("от 5000") ||
-          h.includes("> 5000 руб") ||
-          h.includes("5000+") ||
-          h.includes("5000.01+") ||
-          (h.includes("rfbs") && h.includes("5000") && (h.includes("+") || h.includes(">") || h.includes(".01")))) {
+if ((h.includes("5000") && (h.includes("+") || h.includes("plus") || h.includes(">") || h.includes(".01+"))) || 
+           h.includes("tier3") || 
+           h.includes("c3") ||
+           h.includes(">5000") ||
+           h.includes("от 5000") ||
+           h.includes("> 5000 руб") ||
+           h.includes("5000+") ||
+           h.includes("5000.01+") ||
+           (h.includes("rfbs") && h.includes("5000") && (h.includes("+") || h.includes(">") || h.includes(".01")))) {
         tier3 = i;
-        console.log(`  ✓ 找到 tier3 列 [${i}]: ${originalH}`);
       }
     }
   }
   
   // 🔹 策略2：兜底 - 按顺序识别费率列
   if (tier1 === -1 || tier2 === -1 || tier3 === -1) {
-    console.log("[佣金列识别] 未找到所有阶梯列，尝试兜底策略...");
     const rateColumns: number[] = [];
     for (let i = 0; i < headers.length; i++) {
       const h = headers[i].toLowerCase();
@@ -160,23 +154,18 @@ function findCommissionTierColumns(headers: string[]): { tier1: number; tier2: n
       }
     }
     
-    console.log(`[佣金列识别] 找到 ${rateColumns.length} 个费率列:`, rateColumns.map(i => `[${i}]${headers[i]}`));
-    
     if (rateColumns.length >= 3) {
       if (tier1 === -1) tier1 = rateColumns[0];
       if (tier2 === -1) tier2 = rateColumns[1];
       if (tier3 === -1) tier3 = rateColumns[2];
-      console.log(`  → 使用前3个费率列作为阶梯`);
     } else if (rateColumns.length === 1) {
       // 🔹 极端情况：只有一列费率，可能是通用费率
-      console.log(`  → 只找到1个费率列，将所有阶梯设为相同值`);
       tier1 = rateColumns[0];
       tier2 = rateColumns[0];
       tier3 = rateColumns[0];
     }
   }
   
-  console.log(`[佣金列识别] 最终结果: tier1=${tier1}, tier2=${tier2}, tier3=${tier3}`);
   return { tier1, tier2, tier3 };
 }
 
@@ -189,16 +178,13 @@ function findShippingHeaderRow(rows: string[][]): number {
     const row = rows[i];
     const joined = row.join(" ").toLowerCase();
     if (joined.includes("配送方式") && (joined.includes("尺寸限制") || joined.includes("重量限制"))) {
-      console.log(`[物流解析] 找到真实表头行: 第 ${i + 1} 行`);
       return i;
     }
     if (joined.includes("deliveryvariant") && joined.includes("weight")) {
-      console.log(`[物流解析] 找到英文表头行: 第 ${i + 1} 行`);
       return i;
     }
     // 俄文备选
     if (joined.includes("метод") && joined.includes("размер")) {
-      console.log(`[物流解析] 找到俄文表头行: 第 ${i + 1} 行`);
       return i;
     }
   }
@@ -276,8 +262,6 @@ function parseShippingRateString(rateStr: string): { fixFee: number; varFeePerGr
     // 步骤5: 验证和警告
     if (result.fixFee === 0 && result.varFeePerGram === 0 && rateStr.trim() !== "0" && rateStr.trim() !== "-") {
       console.warn(`[费率解析警告] 无法解析费率字符串: "${rateStr}"`);
-    } else {
-      console.log(`[费率解析] 成功: "${rateStr}" → 固定费=${result.fixFee}, 变动费=${result.varFeePerGram}/g`);
     }
   } catch (error) {
     console.warn(`[费率解析错误] 解析异常: "${rateStr}"`, error);
@@ -343,9 +327,7 @@ function parseDimensionString(dimStr: string): { maxSum: number; maxLength: numb
   }
 
   // 🔹 打印解析结果
-  if (result.maxSum !== Infinity || result.maxLength !== Infinity) {
-    console.log(`📏 尺寸解析: "${dimStr}" → 总和限${result.maxSum}cm / 长边限${result.maxLength}cm`);
-  }
+  // (dimension parsing result used internally)
 
   return result;
 }
@@ -437,7 +419,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
       if (savedConfig) {
         const parsed = JSON.parse(savedConfig);
         setInterceptionConfig(parsed);
-        console.log("[数据中心] 从 localStorage 恢复拦截配置:", parsed);
       }
     } catch (e) {
       console.error("[数据中心] 恢复拦截配置失败:", e);
@@ -455,32 +436,16 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
       const savedMapping = localStorage.getItem("ozon_column_mapping");
       
       if (savedVersion !== DATA_VERSION) {
-        console.log(`[数据中心] 检测到数据版本更新 (${savedVersion} → ${DATA_VERSION})，清除旧数据...`);
         localStorage.removeItem("ozon_commission_data");
         localStorage.removeItem("ozon_shipping_data");
         localStorage.removeItem("ozon_column_mapping");
         localStorage.setItem("ozon_data_version", DATA_VERSION);
-        console.log(`[数据中心] 旧数据已清除，请重新上传佣金表`);
-        // 🔹 设置标志，提示用户重新上传
-        console.log(`\n⚠️ ================================`);
-        console.log(`⚠️ 重要：请重新上传佣金表CSV文件！`);
-        console.log(`⚠️ ================================\n`);
       } else {
         if (savedCommission) {
           const parsed = JSON.parse(savedCommission);
           if (Array.isArray(parsed) && parsed.length > 0) {
             setCommissionData(parsed);
             setCommissionLoaded(true);
-            console.log(`[数据中心] 从 localStorage 恢复 ${parsed.length} 条佣金数据`);
-            
-            // 🔹 显示第一条数据的阶梯结构
-            if (parsed.length > 0) {
-              const firstItem = parsed[0];
-              console.log(`[数据中心] 示例佣金数据: ${firstItem.primaryCategory} > ${firstItem.secondaryCategory}`);
-              firstItem.tiers.forEach((tier: any, i: number) => {
-                console.log(`  阶梯${i+1}: ${tier.min}-${tier.max === Infinity ? '∞' : tier.max} RUB → ${tier.rate}%`);
-              });
-            }
           }
         }
         
@@ -490,7 +455,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             // 🔴 强制修复：如果 volumetricDivisor < 1000，重写为 12000
             const fixedParsed = parsed.map((item: ShippingChannel) => {
               if (item.volumetricDivisor !== undefined && item.volumetricDivisor < 1000) {
-                console.log(`[数据中心] 修复渠道 ${item.name} 的 volumetricDivisor: ${item.volumetricDivisor} → 12000`);
                 return { ...item, volumetricDivisor: 12000 };
               }
               return item;
@@ -505,10 +469,8 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             });
             
             if (hasDuplicates) {
-              console.warn("[数据中心] 检测到重复ID，自动清理旧数据...");
               localStorage.removeItem("ozon_shipping_data");
               setShippingData(DEFAULT_SHIPPING_DATA);
-              console.log("[数据中心] 已恢复默认物流数据");
             } else {
               setShippingData(fixedParsed);
               // 如果有修复，更新 localStorage
@@ -517,9 +479,7 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
               );
               if (hasFixed) {
                 localStorage.setItem("ozon_shipping_data", JSON.stringify(fixedParsed));
-                console.log("[数据中心] 已修复并保存 volumetricDivisor 数据");
               }
-              console.log(`[数据中心] 从 localStorage 恢复 ${fixedParsed.length} 条物流数据`);
             }
           }
         }
@@ -528,7 +488,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
           const parsed = JSON.parse(savedMapping);
           if (parsed.commission && parsed.shipping) {
             setColumnMapping(parsed);
-            console.log(`[数据中心] 从 localStorage 恢复列映射配置`);
           }
         }
       }
@@ -552,7 +511,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
           throw new Error("无法找到佣金表的真实表头行（需要包含「一级类目」和「二级类目」）");
         }
 
-        console.log(`[佣金解析] 找到真实表头行: 第 ${headerIdx + 1} 行`);
         const headers = rawRows[headerIdx];
         const dataRows = rawRows.slice(headerIdx + 1);
 
@@ -566,7 +524,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
 
         // 寻找费率列
         const { tier1, tier2, tier3 } = findCommissionTierColumns(headers);
-        console.log(`[佣金解析] 费率列索引: tier1=${tier1}, tier2=${tier2}, tier3=${tier3}`);
 
         const parsed: CategoryCommission[] = [];
         for (const row of dataRows) {
@@ -589,9 +546,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             ],
           };
           
-          console.log(`[佣金解析] ${primary} > ${secondary}: [${rate1}%, ${rate2}%, ${rate3}%]`);
-          console.log(`  原始数据: tier1="${row[tier1]}", tier2="${row[tier2]}", tier3="${row[tier3]}"`);
-          
           parsed.push(commissionItem);
         }
 
@@ -606,7 +560,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             try {
               const rawRows = results.data as string[][];
               const parsed = parseRows(rawRows);
-              console.log(`[佣金解析] 成功解析 ${parsed.length} 条佣金数据`);
               setCommissionData(parsed);
               setCommissionLoaded(true);
               localStorage.setItem("ozon_commission_data", JSON.stringify(parsed));
@@ -627,7 +580,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             const worksheet = workbook.Sheets[firstSheetName];
             const rawRows = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1, defval: "", raw: false });
             const parsed = parseRows(rawRows);
-            console.log(`[佣金解析] 成功解析 ${parsed.length} 条佣金数据`);
             setCommissionData(parsed);
             setCommissionLoaded(true);
             localStorage.setItem("ozon_commission_data", JSON.stringify(parsed));
@@ -661,14 +613,12 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
 
         if (headerIdx === -1) {
           // 如果找不到标准表头，尝试用第一个有内容的行
-          console.warn("[物流解析] 未找到标准表头，尝试使用第一行作为表头");
           // 尝试使用 Список без неинтегр. 3PL sheet 的格式
           return parseAlternativeShippingFormat(rawRows);
         }
 
         const headers = rawRows[headerIdx];
         const dataRows = rawRows.slice(headerIdx + 1);
-        console.log(`[物流解析] 表头: ${JSON.stringify(headers)}`);
 
         // 🔴 重构：使用 Schema Registry 进行列映射（零硬编码）
         const colMap = buildColumnMapping(headers);
@@ -692,8 +642,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
           billingType: colMap['billingType'] ?? -1,
           volumetricDivisor: colMap['volumetricDivisor'] ?? -1,
         };
-        
-        console.log(`[物流解析] 字段映射: ${JSON.stringify(fieldMapping)}`);
 
         const parsed: ShippingChannel[] = [];
         const idCounter = new Map<string, number>(); // 跟踪ID出现次数
@@ -868,19 +816,16 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             if (!sheetName) {
               sheetName = workbook.SheetNames[0];
             }
-            console.log(`[物流解析] 使用 Sheet: ${sheetName}`);
 
             const worksheet = workbook.Sheets[sheetName];
             const rawRows = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1, defval: "", raw: false });
 
             const parsed = parseShippingRows(rawRows, sheetName);
-            console.log(`[物流解析] 成功解析 ${parsed.length} 条物流渠道数据`);
 
             // 根据 mode 处理数据
             let finalData: ShippingChannel[];
             if (mode === "overwrite") {
               finalData = parsed;
-              console.log(`[物流解析] 覆盖模式：清空旧数据，保留新数据 ${parsed.length} 条`);
             } else {
               // merge 模式：根据 uniqueId 合并
               const existingMap = new Map(shippingData.map(ch => [ch.id, ch]));
@@ -888,7 +833,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
                 existingMap.set(ch.id, ch); // 覆盖或新增
               });
               finalData = Array.from(existingMap.values());
-              console.log(`[物流解析] 并存模式：合并后共 ${finalData.length} 条`);
             }
 
             setShippingData(finalData);
@@ -909,13 +853,11 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             try {
               const rawRows = results.data as string[][];
               const parsed = parseShippingRows(rawRows);
-              console.log(`[物流解析] 成功解析 ${parsed.length} 条物流渠道数据`);
 
               // 根据 mode 处理数据
               let finalData: ShippingChannel[];
               if (mode === "overwrite") {
                 finalData = parsed;
-                console.log(`[物流解析] 覆盖模式：清空旧数据，保留新数据 ${parsed.length} 条`);
               } else {
                 // merge 模式：根据 uniqueId 合并
                 const existingMap = new Map(shippingData.map(ch => [ch.id, ch]));
@@ -923,7 +865,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
                   existingMap.set(ch.id, ch); // 覆盖或新增
                 });
                 finalData = Array.from(existingMap.values());
-                console.log(`[物流解析] 并存模式：合并后共 ${finalData.length} 条`);
               }
 
               setShippingData(finalData);
@@ -950,7 +891,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
     setCommissionLoaded(false);
     localStorage.removeItem("ozon_commission_data");
     localStorage.removeItem("ozon_commission_mappings"); // 🔹 清除映射历史
-    console.log("[数据中心] 佣金数据和映射历史已清除");
   }, []);
 
   /**
@@ -961,7 +901,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
     setShippingLoaded(false);
     localStorage.removeItem("ozon_shipping_data");
     localStorage.removeItem("ozon_shipping_mappings"); // 🔹 清除映射历史
-    console.log("[数据中心] 物流数据和映射历史已清除");
   }, []);
 
   /**
@@ -971,7 +910,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
     setColumnMapping((prev) => {
       const newMapping = { ...prev, [type]: mapping };
       localStorage.setItem("ozon_column_mapping", JSON.stringify(newMapping));
-      console.log(`[数据中心] ${type === "commission" ? "佣金表" : "物流表"}列映射已更新`);
       return newMapping;
     });
   }, []);
@@ -982,7 +920,6 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
   const updateInterceptionConfig = useCallback((config: Record<string, boolean>) => {
     setInterceptionConfig(config);
     localStorage.setItem("ozon_interception_config", JSON.stringify(config));
-    console.log("[数据中心] 拦截配置已更新:", config);
   }, []);
 
   const getCategories = useCallback(() => {
@@ -1197,7 +1134,7 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
 
       return { available, unavailable };
     },
-    [shippingData]
+    [shippingData, interceptionConfig]
   );
 
   return (

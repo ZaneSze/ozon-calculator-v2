@@ -227,12 +227,5 @@ export function buildColumnMapping(headers: string[]): Record<string, number> {
     }
   });
   
-  // 输出诊断信息
-  console.log('[Schema Registry] 列映射结果:');
-  diagnostics.forEach(d => {
-    const status = d.matchedField ? `✅ → ${d.matchedField}` : '⚠️ 未匹配';
-    console.log(`  [${d.index}] "${d.header}" ${status}`);
-  });
-  
   return mapping;
 }

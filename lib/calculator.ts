@@ -39,23 +39,14 @@ export function getCommissionRate(
   commission: CategoryCommission,
   priceRUB: number
 ): number {
-  console.log(`\n[getCommissionRate] 开始匹配`);
-  console.log(`  输入 priceRUB: ${priceRUB.toFixed(2)}`);
-  console.log(`  类目: ${commission.primaryCategory} > ${commission.secondaryCategory}`);
-  console.log(`  阶梯数据:`);
-  
   for (let i = 0; i < commission.tiers.length; i++) {
     const tier = commission.tiers[i];
-    console.log(`    阶梯${i+1}: ${tier.min}-${tier.max === Infinity ? '∞' : tier.max} RUB → ${tier.rate}%`);
-    
     if (priceRUB >= tier.min && priceRUB <= tier.max) {
-      console.log(`  ✅ 匹配成功: 阶梯${i+1}, 佣金率 ${tier.rate}%`);
       return tier.rate;
     }
   }
   
   const fallback = commission.tiers[commission.tiers.length - 1].rate;
-  console.log(`  ⚠️ 未匹配，使用最后一阶梯: ${fallback}%`);
   return fallback;
 }
 
@@ -408,24 +399,8 @@ export function calculateSixTierPricing(
   const withdrawalFee = parseFloat(String(input.withdrawalFee)) || 1.5;
   const cpaRate = input.cpaEnabled ? (parseFloat(String(input.cpaRate)) || 0) : 0;
 
-  console.log("=== 六档定价推荐矩阵计算开始 ===");
-  console.log("总固定成本:", fixedCost.toFixed(2), "RMB");
-  console.log("  - 采购:", purchaseCost.toFixed(2));
-  console.log("  - 头程:", domesticShipping.toFixed(2));
-  console.log("  - 包装:", packagingFee.toFixed(2));
-  console.log("  - 跨境运费:", internationalShipping.toFixed(2));
-  console.log("  - 退货损耗:", returnCost.toFixed(2));
-  console.log("  - CPC成本:", cpcCost.toFixed(2));
-  console.log("汇率:", exchangeRate);
-  console.log("提现手续费:", withdrawalFee, "%");
-  console.log("CPA广告率:", cpaRate, "%");
-  console.log("佣金阶梯:", commission.tiers.map(t => `${t.min}-${t.max === Infinity ? '∞' : t.max}:${t.rate}%`).join(', '));
-
   return anchors.map((anchor) => {
     const T_m = anchor.profitMargin / 100; // 转换为小数
-    
-    console.log(`\n--- ${anchor.label} (目标利润率 ${anchor.profitMargin}%) ---`);
-    console.log("目标利润率 T_m:", T_m);
     
     // 🔹 使用迭代算法求解
     let currentPriceRMB = 100; // 初始猜测值
@@ -454,8 +429,6 @@ export function calculateSixTierPricing(
       const denominator = M - T_m;
       
       if (denominator <= 0) {
-        console.log(`  迭代 ${iteration}: 分母 ${denominator.toFixed(6)} <= 0，无法达到目标利润率`);
-        console.log(`    当前佣金率=${commissionRate}%, M=${(M*100).toFixed(4)}%, 最大可实现利润率=${(M*100).toFixed(1)}%`);
         break;
       }
       
@@ -464,18 +437,14 @@ export function calculateSixTierPricing(
       
       // 🔹 安全校验：检查计算结果是否合法
       if (!isFinite(newPriceRMB) || isNaN(newPriceRMB) || newPriceRMB <= 0) {
-        console.log(`  迭代 ${iteration}: 计算结果不合法 P_rmb=${newPriceRMB}`);
         break;
       }
       
       currentPriceRMB = newPriceRMB;
       
-      console.log(`  迭代 ${iteration}: P_rmb=${currentPriceRMB.toFixed(2)}, P_rub=${(currentPriceRMB/exchangeRate).toFixed(2)}, 佣金=${commissionRate}%, M=${(M*100).toFixed(4)}%, 分母=${denominator.toFixed(6)}`);
-      
       // 检查是否收敛
       if (Math.abs(currentPriceRMB - lastPriceRMB) < 0.01) {
         converged = true;
-        console.log(`  ✓ 已收敛`);
       }
       
       iteration++;
@@ -491,7 +460,6 @@ export function calculateSixTierPricing(
       
       // 🔹 再次验证佣金匹配
       const verifyCommission = getCommissionRate(commission, finalPriceRUB);
-      console.log(`  最终验证: P_rmb=${finalPriceRMB}, P_rub=${finalPriceRUB}, 匹配佣金=${verifyCommission}%`);
     }
     
     // 🔹 判断是否合法
@@ -508,9 +476,6 @@ export function calculateSixTierPricing(
       } else {
         error = "空间不足";
       }
-      console.log(`  ❌ 失败: ${error}`);
-    } else {
-      console.log(`  ✅ 成功: ¥${finalPriceRMB} RMB (${finalPriceRUB} RUB)`);
     }
 
     return {
@@ -1189,21 +1154,8 @@ export function performFullCalculation(
   const priceRMB = input.targetPriceRMB;
   const priceRUB = priceRMB / input.exchangeRate;
   
-  console.log(`\n=== 佣金阶梯匹配 ===`);
-  console.log(`前台售价: ${priceRMB.toFixed(2)} RMB = ${priceRUB.toFixed(2)} RUB`);
-  console.log(`佣金阶梯数据:`);
-  activeCommission.tiers.forEach((tier, i) => {
-    console.log(`  阶梯${i+1}: ${tier.min}-${tier.max === Infinity ? '∞' : tier.max} RUB → ${tier.rate}%`);
-  });
-  
   const commissionRate = getCommissionRate(activeCommission, priceRUB);
-  console.log(`✓ 匹配结果: 佣金率 = ${commissionRate}%`);
   
-  const matchedTier = activeCommission.tiers.find(tier => priceRUB >= tier.min && priceRUB <= tier.max);
-  if (matchedTier) {
-    console.log(`  所属阶梯: ${matchedTier.min}-${matchedTier.max === Infinity ? '∞' : matchedTier.max} RUB`);
-  }
-
   // 物流费
   const internationalShipping = shippingChannel
     ? calculateShippingCost(shippingChannel, chargeableWeight)
@@ -1249,21 +1201,6 @@ export function performFullCalculation(
 
   // 提现手续费金额 (RMB) = P_rmb × (1-C%) × W%
   const withdrawalFeeAmount = priceRMB * (1 - commissionRate / 100) * (input.withdrawalFee / 100);
-
-  // 🔹 成本结构详细日志
-  console.log(`\n=== 成本结构明细 ===`);
-  console.log(`采购成本: ${input.purchaseCost.toFixed(2)} RMB`);
-  console.log(`头程杂费: ${input.domesticShipping.toFixed(2)} RMB`);
-  console.log(`包装费: ${input.packagingFee.toFixed(2)} RMB`);
-  console.log(`跨境运费: ${internationalShipping.toFixed(2)} RMB`);
-  console.log(`平台佣金: ${commissionAmount.toFixed(2)} RMB (${commissionRate}%)`);
-  console.log(`提现手续费: ${withdrawalFeeAmount.toFixed(2)} RMB (${input.withdrawalFee}%)`);
-  console.log(`CPA广告: ${cpaCost.toFixed(2)} RMB`);
-  console.log(`CPC广告: ${cpcCost.toFixed(2)} RMB`);
-  console.log(`退货损耗: ${returnCost.toFixed(2)} RMB`);
-  console.log(`---`);
-  console.log(`总固定成本: ${totalFixedCost.toFixed(2)} RMB`);
-  console.log(`总成本: ${(totalFixedCost + commissionAmount + withdrawalFeeAmount + cpaCost).toFixed(2)} RMB`);
 
   // ROI（投资回报率）= 净利润 ÷ 总成本 × 100%
   // 总成本包含所有实际支出（采购+头程+包装+跨境运费+佣金+提现手续费+广告+退货损耗）

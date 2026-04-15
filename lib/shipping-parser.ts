@@ -9,8 +9,8 @@
  * 如: 150 000,00 -> 150000.00
  */
 export function parseEuropeanNumber(val: string | number | null | undefined): number {
-  if (val === null || val === undefined || val === '') {
-    return Infinity;
+  if (val === null || val === undefined || val === '' || val === '-') {
+    return 0;
   }
   
   // 1. 转为字符串
@@ -25,7 +25,7 @@ export function parseEuropeanNumber(val: string | number | null | undefined): nu
   // 4. 提取数字部分（保留小数点和负号）
   const num = parseFloat(cleanVal.replace(/[^\d.-]/g, ''));
   
-  return isNaN(num) ? Infinity : num;
+  return isNaN(num) ? 0 : num;
 }
 
 /**
@@ -95,7 +95,7 @@ export function parseDimensions(str: string | number | null | undefined): { maxS
   for (const pattern of sumPatterns) {
     const match = text.match(pattern);
     if (match) {
-      maxSide = parseFloat(match[1]);
+      maxSum = parseFloat(match[1]);
       break;
     }
   }

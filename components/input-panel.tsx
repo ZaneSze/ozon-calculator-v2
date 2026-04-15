@@ -397,11 +397,12 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
               <button
                 type="button"
                 onClick={() => updateField("cpaEnabled", !input.cpaEnabled)}
-                className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-1 ${
                   input.cpaEnabled
                     ? "bg-green-500 text-white shadow-sm"
                     : "bg-slate-200 text-slate-500"
                 }`}
+                aria-label={input.cpaEnabled ? "关闭CPA广告" : "开启CPA广告"}
               >
                 {input.cpaEnabled ? "ON" : "OFF"}
               </button>
@@ -435,11 +436,12 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
               <button
                 type="button"
                 onClick={() => updateField("cpcEnabled", !input.cpcEnabled)}
-                className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-1 ${
                   input.cpcEnabled
                     ? "bg-blue-600 text-white shadow-sm"
                     : "bg-slate-200 text-slate-500"
                 }`}
+                aria-label={input.cpcEnabled ? "关闭CPC广告" : "开启CPC广告"}
               >
                 {input.cpcEnabled ? "ON" : "OFF"}
               </button>

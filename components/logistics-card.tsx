@@ -198,7 +198,8 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             {freightData.formula}
           </div>
           
-          {/* 计算轨迹 (Debug) */}
+          {/* 计算轨迹 (Debug - dev only) */}
+          {process.env.NODE_ENV === 'development' && (
           <CalculationTrace 
             channel={{
               name: channel.name,
@@ -220,6 +221,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             interceptionReasons={[]}
             isAvailable={true}
           />
+          )}
         </div>
       </details>
 

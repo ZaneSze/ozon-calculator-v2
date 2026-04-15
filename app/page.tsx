@@ -5,7 +5,7 @@ import { InputPanel } from "@/components/input-panel";
 import { Dashboard } from "@/components/dashboard";
 import { LogisticsCard } from "@/components/logistics-card";
 import { useDataHub } from "@/lib/data-hub-context";
-import { RotateCcw, Truck, Upload, Database, ChevronDown, FileText, Star, Download, Settings, AlertCircle, RefreshCw, Lock, Unlock } from "lucide-react";
+import { RotateCcw, Truck, Upload, FileText, Settings, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -325,49 +325,51 @@ export default function Home() {
   );
   
   // 🔹 利润率锁定时：成本变化自动反推售价
+  // 注意：监听输入参数而非结果，防止无限循环
+  const lockedMarginRef = useRef(lockedMargin);
   useEffect(() => {
     if (lockedMargin === null || !commission) return;
     
-    const reverseResult = reversePriceFromMargin(lockedMargin, effectiveInput, commission, selectedChannel || undefined);
-    
-    if (reverseResult.error) {
-      setMarginError(reverseResult.error);
-    } else if (reverseResult.priceRMB > 0) {
-      setMarginError(null);
-      setInput((prev) => ({ ...prev, targetPriceRMB: reverseResult.priceRMB }));
+    // 防止在同一渲染周期内重复触发
+    if (lockedMarginRef.current === lockedMargin) {
+      const reverseResult = reversePriceFromMargin(lockedMargin, effectiveInput, commission, selectedChannel || undefined);
+      
+      if (reverseResult.error) {
+        setMarginError(reverseResult.error);
+      } else if (reverseResult.priceRMB > 0) {
+        setMarginError(null);
+        setInput((prev) => ({ ...prev, targetPriceRMB: reverseResult.priceRMB }));
+      }
     }
+    lockedMarginRef.current = lockedMargin;
   }, [
-    // 🔹 监听总成本变化 — 任何影响成本的参数变化都会导致 total 变化
-    // 同时监听佣金和物流渠道，因为它们影响计算路径但可能不即时反映在 total 中
+    // 🔹 监听影响成本的输入参数变化
+    // 使用 input 对象而非 result，避免循环依赖
+    effectiveInput.purchaseCost,
+    effectiveInput.domesticShipping,
+    effectiveInput.packagingFee,
+    effectiveInput.weight,
+    effectiveInput.length,
+    effectiveInput.width,
+    effectiveInput.height,
+    effectiveInput.cpcEnabled,
+    effectiveInput.cpcBid,
+    effectiveInput.cpcConversionRate,
+    effectiveInput.exchangeRate,
+    effectiveInput.withdrawalFee,
     lockedMargin,
-    result.costs.total,
     commission,
     selectedChannel,
   ]);
   
   // 🔹 监控佣金阶梯变化
   useEffect(() => {
-    const priceRUB = effectiveInput.targetPriceRMB / effectiveInput.exchangeRate;
-    console.log(`\n💰 售价变动: ${effectiveInput.targetPriceRMB} RMB = ${priceRUB.toFixed(2)} RUB`);
-    console.log(`当前佣金率: ${result.commissionRate}%`);
-    if (commission) {
-      const matchedTier = commission.tiers.find(tier => priceRUB >= tier.min && priceRUB <= tier.max);
-      if (matchedTier) {
-        console.log(`所属阶梯: ${matchedTier.min}-${matchedTier.max === Infinity ? '∞' : matchedTier.max} RUB (${matchedTier.rate}%)`);
-      }
-    }
+    // 佣金阶梯变化监控已移除调试日志
   }, [effectiveInput.targetPriceRMB, effectiveInput.exchangeRate, result.commissionRate, commission]);
   
   // 🔹 调试：输出当前使用的佣金数据
   useEffect(() => {
-    if (commission) {
-      console.log(`\n=== 当前使用佣金数据 ===`);
-      console.log(`类目: ${commission.primaryCategory} > ${commission.secondaryCategory}`);
-      console.log(`阶梯费率:`);
-      commission.tiers.forEach((tier, i) => {
-        console.log(`  阶梯${i+1}: ${tier.min}-${tier.max === Infinity ? '∞' : tier.max} RUB → ${tier.rate}%`);
-      });
-    }
+    // 佣金数据调试日志已移除
   }, [commission]);
 
   // 计算六档定价推荐矩阵（使用实际汇率）
@@ -488,10 +490,7 @@ export default function Home() {
     
     if (!confirmed) return;
     
-    console.log("🧹 开始全局重置...");
-    
     // ===== 1. 全局状态清空 =====
-    console.log("  [1/4] 重置输入参数...");
     setInput(DEFAULT_INPUT);
     setSelectedChannelId(null);
     setMarginError(null);
@@ -499,7 +498,6 @@ export default function Home() {
     setLockedMargin(null);
     
     // ===== 2. 持久化存储清理 =====
-    console.log("  [2/4] 清除 localStorage...");
     
     // 清除输入数据
     localStorage.removeItem(STORAGE_KEY);
@@ -521,14 +519,12 @@ export default function Home() {
     localStorage.removeItem("ozon_data_version");
     
     // ===== 3. 逻辑干预撤销 =====
-    console.log("  [3/4] 清除数据中心数据...");
     
     // 清除上传的佣金和物流数据
     if (clearCommissionData) clearCommissionData();
     if (clearShippingData) clearShippingData();
     
     // ===== 4. UI 刷新与防御 =====
-    console.log("  [4/4] 强制页面刷新...");
     
     // 显示成功提示
     alert("✅ 重置成功！系统已恢复至初始状态。");
@@ -553,13 +549,10 @@ export default function Home() {
       setMappingDataType("commission");
       setPendingMappingFile(file);
       setMappingDialogOpen(true);
-      console.log("佣金表解析完成，待确认映射:", file.name);
     } catch (err) {
-      console.error("解析佣金表失败:", err);
       // 回退到直接加载
       try {
         await loadCommissionData(file, "overwrite");
-        console.log("佣金表上传成功:", file.name);
       } catch (loadErr) {
         console.error("上传佣金表失败:", loadErr);
       }
@@ -581,13 +574,10 @@ export default function Home() {
       setMappingDataType("shipping");
       setPendingMappingFile(file);
       setMappingDialogOpen(true);
-      console.log("物流表解析完成，待确认映射:", file.name);
     } catch (err) {
-      console.error("解析物流表失败:", err);
       // 回退到直接加载
       try {
         await loadShippingData(file, "overwrite");
-        console.log("物流表上传成功:", file.name);
       } catch (loadErr) {
         console.error("上传物流表失败:", loadErr);
       }
@@ -596,17 +586,14 @@ export default function Home() {
   
   // 🔹 映射确认处理
   const handleMappingConfirm = useCallback(async (mappings: FieldMapping[]) => {
-    console.log("映射已确认:", mappings);
     setMappingDialogOpen(false);
     
     if (pendingMappingFile) {
       try {
         if (mappingDataType === "commission") {
           await loadCommissionData(pendingMappingFile, "overwrite");
-          console.log("佣金表上传成功");
         } else {
           await loadShippingData(pendingMappingFile, "overwrite");
-          console.log("物流表上传成功");
           
           // 🔹 物流表：提取拦截配置并保存
           const config: Record<string, boolean> = {};
@@ -616,7 +603,6 @@ export default function Home() {
             }
           });
           updateInterceptionConfig(config);
-          console.log("拦截配置已保存:", config);
         }
       } catch (err) {
         console.error("上传数据失败:", err);
@@ -823,7 +809,7 @@ export default function Home() {
                 className="w-[70px] h-6 text-xs bg-white px-2"
               />
               <span className="text-[10px] text-slate-400">₽</span>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={fetchExchangeRate} disabled={isFetchingRate} title="获取汇率">
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={fetchExchangeRate} disabled={isFetchingRate} title="获取汇率" aria-label="获取汇率">
                 <RefreshCw className={`h-3 w-3 ${isFetchingRate ? "animate-spin" : ""}`} />
               </Button>
               {/* 辅助提示：当前反向换算 */}
