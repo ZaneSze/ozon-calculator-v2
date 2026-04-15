@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Package, Truck, Megaphone, Tag, AlertTriangle, RotateCcw, Battery, Droplets, CheckCircle2, DollarSign } from "lucide-react";
+import { Package, Truck, Megaphone, Tag, AlertTriangle, RotateCcw, Battery, Droplets, CheckCircle2, DollarSign, Lock, Unlock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -69,9 +69,12 @@ interface InputPanelProps {
   shippingData?: ShippingChannel[];
   // 🔹 选中的物流渠道计费信息（用于计抛预警同步）
   selectedBillingInfo?: BillingInfo | null;
+  // 🔹 利润率锁定
+  marginLocked?: boolean;
+  onToggleMarginLock?: () => void;
 }
 
-export function InputPanel({ input, onInputChange, currentProfitMargin, onReversePriceFromMargin, marginError, onReset, adRiskControl, shippingData = [], selectedBillingInfo }: InputPanelProps) {
+export function InputPanel({ input, onInputChange, currentProfitMargin, onReversePriceFromMargin, marginError, onReset, adRiskControl, shippingData = [], selectedBillingInfo, marginLocked = false, onToggleMarginLock }: InputPanelProps) {
   const { getCategories } = useDataHub();
   const categories = useMemo(() => getCategories(), [getCategories]);
   
@@ -105,11 +108,14 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
       return;
     }
     
+    // 🔹 利润率锁定时，不同步外部利润率到输入框
+    if (marginLocked) return;
+    
     // 当实际利润率变化且不是用户手动输入利润率时，自动同步到输入框
     if (currentProfitMargin !== undefined) {
       setTargetMarginInput(currentProfitMargin.toFixed(1));
     }
-  }, [currentProfitMargin]);
+  }, [currentProfitMargin, marginLocked]);
   
   // 🔹 计抛预警逻辑
   // 仅当：1) 选中的渠道支持计抛 2) 计费重 > 实重 时显示
@@ -632,34 +638,66 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
             {/* 目标利润率 */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">目标利润率</Label>
-              <div className="relative">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">%</span>
-                <Input
-                  type="number"
-                  min="-99"
-                  max="99"
-                  step="1"
-                  value={targetMarginInput}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setTargetMarginInput(val); // 更新本地状态
-                    
-                    // 🔹 设置输入源标记，防止售价更新后再次触发利润率同步
-                    isUpdatingFromMargin.current = true;
-                    
-                    if (val === "" || val === "-") {
-                      // 空值或负号，不触发计算
-                    } else {
-                      const targetMargin = parseFloat(val);
-                      if (onReversePriceFromMargin && !isNaN(targetMargin)) {
-                        onReversePriceFromMargin(targetMargin);
+              <div className="relative flex items-center gap-1">
+                <div className="relative flex-1">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">%</span>
+                  <Input
+                    type="number"
+                    min="-99"
+                    max="99"
+                    step="1"
+                    value={targetMarginInput}
+                    onChange={(e) => {
+                      if (marginLocked) return; // 🔹 锁定时禁止编辑
+                      const val = e.target.value;
+                      setTargetMarginInput(val); // 更新本地状态
+                      
+                      // 🔹 设置输入源标记，防止售价更新后再次触发利润率同步
+                      isUpdatingFromMargin.current = true;
+                      
+                      if (val === "" || val === "-") {
+                        // 空值或负号，不触发计算
+                      } else {
+                        const targetMargin = parseFloat(val);
+                        if (onReversePriceFromMargin && !isNaN(targetMargin)) {
+                          onReversePriceFromMargin(targetMargin);
+                        }
                       }
-                    }
-                  }}
-                  className={`h-9 text-sm pl-6 ${marginError ? "border-red-400 focus-visible:ring-red-400" : ""}`}
-                  placeholder="0"
-                />
+                    }}
+                    className={`h-9 text-sm pl-6 ${marginError ? "border-red-400 focus-visible:ring-red-400" : ""} ${marginLocked ? "bg-slate-50 cursor-not-allowed opacity-80" : ""}`}
+                    placeholder="0"
+                    disabled={marginLocked}
+                  />
+                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={onToggleMarginLock}
+                        className={`flex-shrink-0 h-9 w-9 flex items-center justify-center rounded-md border transition-all ${
+                          marginLocked
+                            ? "bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100"
+                            : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        }`}
+                      >
+                        {marginLocked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={8} className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3">
+                      <p className="text-xs text-slate-600">
+                        {marginLocked ? "利润率已锁定，点击解锁后可修改" : "点击锁定利润率，锁定后将固定不变"}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
+              {marginLocked && (
+                <div className="text-[10px] text-amber-600 font-medium flex items-center gap-1">
+                  <Lock className="h-2.5 w-2.5" />
+                  <span>利润率已锁定</span>
+                </div>
+              )}
               {marginError && (
                 <div className="text-[10px] text-red-600 font-medium mt-1 p-1.5 rounded bg-red-50 border border-red-200">
                   {marginError}

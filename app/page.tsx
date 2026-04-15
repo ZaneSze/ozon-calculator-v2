@@ -5,7 +5,7 @@ import { InputPanel } from "@/components/input-panel";
 import { Dashboard } from "@/components/dashboard";
 import { LogisticsCard } from "@/components/logistics-card";
 import { useDataHub } from "@/lib/data-hub-context";
-import { RotateCcw, Truck, Upload, Database, ChevronDown, FileText, Star, Download, Settings, AlertCircle, RefreshCw } from "lucide-react";
+import { RotateCcw, Truck, Upload, Database, ChevronDown, FileText, Star, Download, Settings, AlertCircle, RefreshCw, Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -174,6 +174,8 @@ export default function Home() {
   
   // 🔹 自动获取汇率
   const [isFetchingRate, setIsFetchingRate] = useState(false);
+  // 🔹 利润率锁定状态
+  const [marginLocked, setMarginLocked] = useState(false);
   
   const fetchExchangeRate = useCallback(async () => {
     setIsFetchingRate(true);
@@ -212,6 +214,12 @@ export default function Home() {
       if (savedLockedChannel) {
         setLockedChannelId(savedLockedChannel);
         setSelectedChannelId(savedLockedChannel);
+      }
+
+      // 🔹 恢复利润率锁定状态
+      const savedMarginLocked = localStorage.getItem("ozon-margin-locked");
+      if (savedMarginLocked === "true") {
+        setMarginLocked(true);
       }
     } catch (error) {
       console.error("Failed to load saved data:", error);
@@ -425,6 +433,15 @@ export default function Home() {
     }
   }, [marginError, input.targetPriceRMB]);
 
+  // 🔹 利润率锁定切换
+  const handleToggleMarginLock = useCallback(() => {
+    setMarginLocked((prev) => {
+      const next = !prev;
+      localStorage.setItem("ozon-margin-locked", String(next));
+      return next;
+    });
+  }, []);
+
   // 🔹 一键重置功能（彻底化：清除所有状态）
   // 🔹 全局重置函数：物理+逻辑+存储三重重置
   const handleReset = useCallback(() => {
@@ -447,6 +464,7 @@ export default function Home() {
     setSelectedChannelId(null);
     setMarginError(null);
     setLockedChannelId(null);
+    setMarginLocked(false);
     
     // ===== 2. 持久化存储清理 =====
     console.log("  [2/4] 清除 localStorage...");
@@ -454,6 +472,7 @@ export default function Home() {
     // 清除输入数据
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem("ozon-locked-channel");
+    localStorage.removeItem("ozon-margin-locked");
     
     // 清除数据中心缓存
     localStorage.removeItem("ozon_commission_data");
@@ -917,6 +936,8 @@ export default function Home() {
                 adRiskControl={result.adRiskControl}
                 shippingData={shippingData}
                 selectedBillingInfo={selectedBillingInfo}
+                marginLocked={marginLocked}
+                onToggleMarginLock={handleToggleMarginLock}
               />
             </div>
           </div>
