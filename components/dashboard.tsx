@@ -460,13 +460,54 @@ export function Dashboard({
               </div>
             </div>
             <div className="text-center p-4 rounded-xl bg-gradient-to-br from-muted/40 to-muted/10 border">
-              <div className="text-xs text-muted-foreground mb-1">投资回报率 ROI</div>
+              <div className="text-xs text-muted-foreground mb-1">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help">投资回报率 ROI</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={8} className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3">
+                      <div className="space-y-1">
+                        <p className="font-medium text-sm">投资回报率 / Return on Investment</p>
+                        <p className="text-xs text-slate-600">
+                          每投入1元总成本能赚取多少净利润。ROI 越高，盈利能力越强。
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          计算公式：净利润 ÷ 总成本 × 100%
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          总成本 = 采购 + 头程 + 包装 + 跨境运费 + 佣金 + 提现手续费 + 广告 + 退货损耗
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <div className={`text-2xl font-bold ${result.roi >= 0 ? "text-green-600" : "text-red-600"}`}>
                 {result.roi.toFixed(1)}%
               </div>
             </div>
             <div className="text-center p-4 rounded-xl bg-gradient-to-br from-muted/40 to-muted/10 border">
-              <div className="text-xs text-muted-foreground mb-1">销售利润率</div>
+              <div className="text-xs text-muted-foreground mb-1">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help">销售利润率</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={8} className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3">
+                      <div className="space-y-1">
+                        <p className="font-medium text-sm">销售利润率 / Profit Margin</p>
+                        <p className="text-xs text-slate-600">
+                          每卖出1元能赚多少净利润。利润率越高，产品定价空间越大。
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          计算公式：(售价 - 总成本) ÷ 售价 × 100%
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <div className={`text-2xl font-bold ${result.profitMargin >= 0 ? "text-green-600" : "text-red-600"}`}>
                 {result.profitMargin.toFixed(1)}%
               </div>
