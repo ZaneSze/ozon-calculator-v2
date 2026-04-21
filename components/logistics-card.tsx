@@ -89,7 +89,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             ⏱ {channel.deliveryTimeMin || 15}-{channel.deliveryTimeMax || 30} 天
           </span>
           {showVolumetricLabel && isAvailable && (
-            <span className="animate-pulse bg-[#F59E0B] text-white text-[10px] px-2 py-0.5 rounded-full font-semibold shadow-sm">
+            <span className="animate-pulse bg-[#F59E0B] text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg ring-2 ring-[#F59E0B]/30">
               ⚠️ 触发计抛
             </span>
           )}
@@ -132,19 +132,19 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
         </div>
       </div>
 
-      {/* 3. 特货属性横条 */}
+      {/* 3. 特货属性横条 - 醒目对比 */}
       <div className="flex gap-2 mb-3">
-        <div className={`flex-1 text-center py-1 rounded text-[10px] font-medium border ${
+        <div className={`flex-1 text-center py-1 rounded text-[11px] font-bold border-2 ${
           limits.allowBattery 
-            ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-            : 'bg-red-50 text-red-400 border-red-100'
+            ? 'bg-emerald-100 text-emerald-700 border-emerald-300' 
+            : 'bg-red-100 text-red-700 border-red-300'
         }`}>
           {limits.allowBattery ? '⚡ 支持带电' : '🚫 禁发带电'}
         </div>
-        <div className={`flex-1 text-center py-1 rounded text-[10px] font-medium border ${
+        <div className={`flex-1 text-center py-1 rounded text-[11px] font-bold border-2 ${
           limits.allowLiquid 
-            ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-            : 'bg-red-50 text-red-400 border-red-100'
+            ? 'bg-emerald-100 text-emerald-700 border-emerald-300' 
+            : 'bg-red-100 text-red-700 border-red-300'
         }`}>
           {limits.allowLiquid ? '💧 支持液体' : '🚫 禁发液体'}
         </div>
@@ -166,35 +166,38 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
         </div>
       </div>
 
-      {/* 5. 计费详情 (默认折叠) */}
+      {/* 5. 计费详情 (默认折叠) - 计费重醒目 */}
       <details className="mt-3 group">
-        <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-[#6366F1] list-none flex items-center gap-1 select-none">
+        <summary className="text-[10px] cursor-pointer hover:text-[#6366F1] list-none flex items-center gap-1 select-none font-medium">
           <span className="group-open:rotate-180 transition-transform">▼</span> 
-          <span>查看计费详情 (当前计费重: {freightData.billingWeight}g)</span>
+          <span>查看计费详情 </span>
+          <span className={`font-bold ${billing?.isVolumetric ? "text-[#EF4444]" : "text-foreground"}`}>
+            (计费重: {freightData.billingWeight}g)
+          </span>
         </summary>
-        <div className="mt-2 text-[10px] text-muted-foreground bg-secondary p-2 rounded border border-dashed border-border space-y-1.5">
+        <div className="mt-2 text-[11px] bg-amber-50/50 p-3 rounded border-2 border-amber-200 space-y-2">
           {/* 实重 */}
           <div className="flex justify-between">
-            <span>实重:</span>
-            <span>{billing?.actualWeight?.toFixed(0) || 0}g</span>
+            <span className="text-muted-foreground">实重:</span>
+            <span className="font-medium">{billing?.actualWeight?.toFixed(0) || 0}g</span>
           </div>
-          {/* 抛重 */}
+          {/* 抛重 - 触发时醒目 */}
           <div className="flex justify-between">
-            <span>抛重:</span>
-            <span className={billing?.isVolumetric ? "text-[#F59E0B] font-medium" : ""}>
+            <span className="text-muted-foreground">抛重:</span>
+            <span className={`font-bold ${billing?.isVolumetric ? "text-[#F59E0B] bg-amber-100 px-1.5 rounded" : ""}`}>
               {billing?.volumetricWeight?.toFixed(0) || 0}g
-              {billing?.isVolumetric && " [触发]"}
+              {billing?.isVolumetric && " ⚠️"}
             </span>
           </div>
-          {/* 计费重高亮 */}
-          <div className="flex justify-between font-semibold pt-1 border-t border-border">
+          {/* 计费重 - 最醒目 */}
+          <div className="flex justify-between font-bold pt-2 border-t-2 border-amber-300">
             <span>计费重:</span>
-            <span className={billing?.isVolumetric ? "text-[#EF4444]" : "text-foreground"}>
+            <span className={`text-lg ${billing?.isVolumetric ? "text-[#EF4444] bg-red-100 px-2 rounded" : "text-[#6366F1] bg-indigo-100 px-2 rounded"}`}>
               {billing?.billingWeight?.toFixed(0) || 0}g
             </span>
           </div>
-          {/* 计算公式 */}
-          <div className="pt-1 border-t border-border text-[9px] opacity-70">
+          {/* 计算公式 - 等宽字体 */}
+          <div className="pt-2 border-t border-amber-200 text-[10px] font-mono bg-white/50 p-1.5 rounded">
             {freightData.formula}
           </div>
           

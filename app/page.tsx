@@ -709,42 +709,42 @@ export default function Home() {
             <span className="text-xs font-bold text-slate-600">🎯 精算</span>
           </div>
           
-          {/* 中间：5个核心指标 - 绝对居中 */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-6 whitespace-nowrap">
-            {/* 净利 */}
-            <div className="flex flex-col items-center">
-              <span className={`text-base font-semibold tabular-nums ${result.netProfit >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+          {/* 中间：5个核心指标 - 绝对居中 - 醒目强化 */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-4 whitespace-nowrap">
+            {/* 净利 - 核心盈亏指标 */}
+            <div className="flex flex-col items-center px-3 py-1 rounded-lg bg-white shadow-sm border">
+              <span className={`text-lg font-bold tabular-nums ${result.netProfit >= 0 ? "text-[#059669]" : "text-[#DC2626]"}`}>
                 ¥{result.netProfit.toFixed(1)}
               </span>
-              <span className="text-[10px] text-muted-foreground font-medium">净利</span>
+              <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wide">净利</span>
             </div>
             {/* ROI */}
-            <div className="flex flex-col items-center">
-              <span className={`text-base font-semibold tabular-nums ${result.roi >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+            <div className="flex flex-col items-center px-3 py-1 rounded-lg bg-white shadow-sm border">
+              <span className={`text-lg font-bold tabular-nums ${result.roi >= 0 ? "text-[#059669]" : "text-[#DC2626]"}`}>
                 {result.roi.toFixed(1)}%
               </span>
-              <span className="text-[10px] text-muted-foreground font-medium">ROI</span>
+              <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wide">ROI</span>
             </div>
             {/* 毛利率 */}
-            <div className="flex flex-col items-center">
-              <span className={`text-base font-semibold tabular-nums ${result.profitMargin >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+            <div className="flex flex-col items-center px-3 py-1 rounded-lg bg-white shadow-sm border">
+              <span className={`text-lg font-bold tabular-nums ${result.profitMargin >= 0 ? "text-[#059669]" : "text-[#DC2626]"}`}>
                 {result.profitMargin.toFixed(1)}%
               </span>
-              <span className="text-[10px] text-muted-foreground font-medium">毛利率</span>
+              <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wide">毛利率</span>
             </div>
             {/* 总成本 */}
-            <div className="flex flex-col items-center">
-              <span className="text-base font-semibold tabular-nums text-foreground">
+            <div className="flex flex-col items-center px-3 py-1 rounded-lg bg-white shadow-sm border">
+              <span className="text-lg font-bold tabular-nums text-slate-700">
                 ¥{result.costs.total.toFixed(1)}
               </span>
-              <span className="text-[10px] text-muted-foreground font-medium">成本</span>
+              <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wide">成本</span>
             </div>
             {/* 售价 */}
-            <div className="flex flex-col items-center whitespace-nowrap">
-              <span className="text-base font-semibold tabular-nums text-[#6366F1]">
-                ¥{input.targetPriceRMB.toFixed(0)} <span className="text-muted-foreground text-xs font-normal">(≈ {Math.round(input.targetPriceRMB * input.exchangeRate).toLocaleString()} ₽)</span>
+            <div className="flex flex-col items-center px-3 py-1 rounded-lg bg-indigo-50 shadow-sm border border-indigo-200 whitespace-nowrap">
+              <span className="text-lg font-bold tabular-nums text-[#4F46E5]">
+                ¥{input.targetPriceRMB.toFixed(0)}
               </span>
-              <span className="text-[10px] text-muted-foreground font-medium">售价</span>
+              <span className="text-[9px] text-indigo-500 font-semibold uppercase tracking-wide">≈ {Math.round(input.targetPriceRMB * input.exchangeRate).toLocaleString()} ₽</span>
             </div>
           </div>
           
@@ -886,23 +886,23 @@ export default function Home() {
           overflowY: 'auto'
         }}
       >
-        {/* 🔴 致命错误 - 无可用渠道（唯一） */}
+        {/* 🔴 致命错误 - 无可用渠道（唯一）- 强烈警告 */}
         {shippingChannels.available.length === 0 && shippingData.length > 0 && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-red-600 text-white border-2 border-red-700 shadow-lg animate-pulse">
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-sm font-bold bg-red-600 text-white border-2 border-red-800 shadow-lg animate-pulse ring-2 ring-red-400">
             <AlertCircle className="h-4 w-4" />
             <span>致命：商品尺寸/重量/属性无法匹配任何物流渠道</span>
           </span>
         )}
         
-        {/* 🔴 阻断错误 - 亏损（唯一） */}
+        {/* 🔴 阻断错误 - 亏损（唯一）- 醒目红色 */}
         {result.netProfit < 0 && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-            <span>❌</span>
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-red-100 text-red-700 border-2 border-red-300 animate-pulse">
+            <span className="text-lg">❌</span>
             <span>亏损: ¥{Math.abs(result.netProfit).toFixed(2)}</span>
           </span>
         )}
         
-        {/* 尺寸/重量超限（唯一） */}
+        {/* 尺寸/重量超限（唯一）- 红色边框 */}
         {(() => {
           const sumDim = input.length + input.width + input.height;
           const maxSide = Math.max(input.length, input.width, input.height);
@@ -910,8 +910,8 @@ export default function Home() {
           const weightEx = shippingChannels.available.find(ch => ch.maxWeight && input.weight > ch.maxWeight);
           if (dimEx || weightEx) {
             return (
-              <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-                <span>❌</span>
+              <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-red-50 text-red-700 border-2 border-red-300">
+                <span>⚠️</span>
                 <span>超限</span>
               </span>
             );
@@ -935,16 +935,16 @@ export default function Home() {
             .slice(0, 1); // 最多只显示一个货值拦截提示
           
           return uniqueValueBlocks.length > 0 ? (
-            <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+            <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-red-100 text-red-700 border-2 border-red-300">
               <span>❌</span>
               <span>货值拦截</span>
             </span>
           ) : null;
         })()}
         
-        {/* ⚠️ 计抛预警 - 橙色药丸（唯一） */}
+        {/* ⚠️ 计抛预警 - 橙色醒目（唯一） */}
         {selectedBillingInfo?.isVolumetric && selectedBillingInfo.billingWeight > selectedBillingInfo.actualWeight && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-amber-100 text-amber-800 border-2 border-amber-400 animate-pulse">
             <span>⚠️</span>
             <span>计抛: {selectedBillingInfo.billingWeight.toFixed(0)}g</span>
           </span>
@@ -952,29 +952,29 @@ export default function Home() {
         
         {/* 广告超支（唯一） */}
         {result.adRiskControl?.isOverBudget && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-amber-100 text-amber-800 border-2 border-amber-400">
             <span>⚠️</span>
             <span>广告超支</span>
           </span>
         )}
         
-        {/* 💡 建议 Tips - 去重后渲染（基于内容去重） */}
+        {/* 💡 建议 Tips - 紫色提示（唯一） */}
         {(() => {
           const uniqueSuggestions = Array.from(new Set(result.suggestions.slice(0, 2)));
           return uniqueSuggestions.map((s, i) => (
-            <span key={`tip-${i}`} className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+            <span key={`tip-${i}`} className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-50 text-indigo-700 border-2 border-indigo-200">
               <span>💡</span>
               <span className="whitespace-nowrap">{s}</span>
             </span>
           ));
         })()}
         
-        {/* 减重建议 - 精简文案（唯一） */}
+        {/* 减重建议 - 绿色（唯一） */}
         {(() => {
           const weightSaved = (selectedBillingInfo?.volumetricWeight || 0) - input.weight;
           if (weightSaved > 50) {
             return (
-              <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+              <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-emerald-50 text-emerald-700 border-2 border-emerald-300">
                 <span>💡</span>
                 <span>减重{weightSaved.toFixed(0)}g进下一阶梯</span>
               </span>
@@ -983,9 +983,9 @@ export default function Home() {
           return null;
         })()}
         
-        {/* ✅ 参数正常提示（唯一） */}
+        {/* ✅ 参数正常提示（唯一） - 绿色醒目 */}
         {!result.warnings.length && result.netProfit >= 0 && !selectedBillingInfo?.isVolumetric && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-emerald-50 text-emerald-700 border-2 border-emerald-300">
             <span>✅</span>
             <span>参数正常</span>
           </span>
