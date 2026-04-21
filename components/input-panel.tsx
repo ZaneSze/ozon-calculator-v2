@@ -235,22 +235,20 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
               onChange={(e) => updateField("weight", parseFloat(e.target.value) || 0)}
               className="h-9 text-sm"
             />
-            {/* 🔹 计抛预警：仅在 isVolumetric && billingWeight > actualWeight 时显示 */}
+            {/* 🔹 计抛预警：仅在 isVolumetric && billingWeight > actualWeight 时显示 - 强烈橙色 */}
             {volWarningActive && selectedBillingInfo && (
-              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-purple-50 border-2 border-purple-300 animate-pulse">
-                <AlertTriangle className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-100 border-3 border-amber-500 shadow-xl animate-warning-pulse">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <div className="text-xs font-bold text-purple-700">
+                  <div className="text-sm font-bold text-amber-800">
                     ⚠️ 计抛预警
                   </div>
-                  <div className="text-[11px] text-purple-600 mt-0.5">
-                    当前尺寸触发计抛：<br/>
-                    抛重 <span className="font-bold">{selectedBillingInfo.volumetricWeight.toFixed(0)}g</span> 
-                    &gt; 实重 <span className="font-bold">{selectedBillingInfo.actualWeight.toFixed(0)}g</span><br/>
-                    计费重已更新为 <span className="font-bold">{selectedBillingInfo.billingWeight.toFixed(0)}g</span>
+                  <div className="text-xs text-amber-700 mt-1">
+                    <div>抛重 <span className="font-bold bg-amber-200 px-1.5 rounded">{selectedBillingInfo.volumetricWeight.toFixed(0)}g</span> &gt; 实重 <span className="font-bold bg-amber-200 px-1.5 rounded">{selectedBillingInfo.actualWeight.toFixed(0)}g</span></div>
+                    <div className="mt-1">计费重: <span className="font-bold text-lg">{selectedBillingInfo.billingWeight.toFixed(0)}g</span></div>
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-1">
-                    计算：{input.length}×{input.width}×{input.height} / {divisor} × 1000 = {selectedBillingInfo.volumetricWeight.toFixed(0)}g
+                  <div className="text-[10px] text-amber-600 mt-1.5 font-mono bg-amber-50 p-1 rounded">
+                    {input.length}×{input.width}×{input.height} / {divisor} × 1000 = {selectedBillingInfo.volumetricWeight.toFixed(0)}g
                   </div>
                 </div>
               </div>
