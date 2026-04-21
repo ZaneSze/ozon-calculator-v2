@@ -919,25 +919,28 @@ export default function Home() {
           return null;
         })()}
         
-        {/* 🔹 货值拦截 - 去重后渲染（基于拦截原因去重） */}
+        {/* 🔹 货值拦截 - 显示具体数值范围 */}
         {(() => {
-          // 去重：基于 reason 文本进行过滤，保留每个唯一原因类型只显示一次
-          const uniqueReasons = new Map<string, boolean>();
-          const uniqueValueBlocks = shippingChannels.unavailable
-            .filter(ch => ch.reason?.includes('货值'))
-            .filter(ch => {
-              // 提取主要拦截原因作为去重 key
-              const reasonKey = ch.reason.split('|')[0].trim();
-              if (uniqueReasons.has(reasonKey)) return false;
-              uniqueReasons.set(reasonKey, true);
-              return true;
-            })
-            .slice(0, 1); // 最多只显示一个货值拦截提示
+          // 提取货值拦截的渠道，获取其数值范围
+          const valueBlockedChannel = shippingChannels.unavailable.find(ch => ch.reason?.includes('货值'));
+          const maxValueRUB = valueBlockedChannel?.maxValueRUB;
+          const minValueRUB = valueBlockedChannel?.minValueRUB;
+          const priceRUB = input.targetPriceRMB * input.exchangeRate;
           
-          return uniqueValueBlocks.length > 0 ? (
+          return (valueBlockedChannel && (maxValueRUB || minValueRUB)) ? (
             <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-bold bg-red-500 text-white border-3 border-red-600 shadow-lg animate-urgent-pulse">
               <span>❌</span>
               <span>货值拦截</span>
+              <details className="inline ml-1 group">
+                <summary className="cursor-help list-none inline text-xs opacity-75 hover:opacity-100">
+                  ⓘ
+                </summary>
+                <div className="hidden group-open:block absolute z-50 mt-2 p-3 bg-white text-slate-700 rounded-lg shadow-xl border-2 border-red-200 text-xs whitespace-nowrap">
+                  <div className="font-bold text-red-600 mb-1">货值限制</div>
+                  <div>您的售价: ≈ {Math.round(priceRUB).toLocaleString()} ₽</div>
+                  <div className="mt-1">允许: {minValueRUB ? Math.round(minValueRUB).toLocaleString() : 0} - {maxValueRUB ? Math.round(maxValueRUB).toLocaleString() : '∞'} ₽</div>
+                </div>
+              </details>
             </span>
           ) : null;
         })()}
