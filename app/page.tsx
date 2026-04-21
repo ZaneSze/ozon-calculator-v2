@@ -919,26 +919,50 @@ export default function Home() {
           return null;
         })()}
         
-        {/* 🔹 货值拦截 - 显示具体数值范围 */}
+        {/* 🔹 渠道价格限制 - 改为更直观的名称和详细说明 */}
         {(() => {
-          // 提取货值拦截的渠道，获取其数值范围
-          const valueBlockedChannel = shippingChannels.unavailable.find(ch => ch.reason?.includes('货值'));
+          // 提取价格限制的渠道，获取其数值范围
+          const valueBlockedChannel = shippingChannels.unavailable.find(ch => ch.reason?.includes('货值') || ch.reason?.includes('价'));
           const maxValueRUB = valueBlockedChannel?.maxValueRUB;
           const minValueRUB = valueBlockedChannel?.minValueRUB;
           const priceRUB = input.targetPriceRMB * input.exchangeRate;
           
+          // 判断是价格过高还是过低
+          const isPriceTooHigh = maxValueRUB && priceRUB > maxValueRUB;
+          const isPriceTooLow = minValueRUB && priceRUB < minValueRUB;
+          
           return (valueBlockedChannel && (maxValueRUB || minValueRUB)) ? (
             <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-bold bg-red-500 text-white border-3 border-red-600 shadow-lg animate-urgent-pulse">
               <span>❌</span>
-              <span>货值拦截</span>
+              <span>{isPriceTooHigh && !isPriceTooLow ? '价格过高' : isPriceTooLow && !isPriceTooHigh ? '价格过低' : '价格不符'}</span>
               <details className="inline ml-1 group">
                 <summary className="cursor-help list-none inline text-xs opacity-75 hover:opacity-100">
                   ⓘ
                 </summary>
-                <div className="hidden group-open:block absolute z-50 mt-2 p-3 bg-white text-slate-700 rounded-lg shadow-xl border-2 border-red-200 text-xs whitespace-nowrap">
-                  <div className="font-bold text-red-600 mb-1">货值限制</div>
-                  <div>您的售价: ≈ {Math.round(priceRUB).toLocaleString()} ₽</div>
-                  <div className="mt-1">允许: {minValueRUB ? Math.round(minValueRUB).toLocaleString() : 0} - {maxValueRUB ? Math.round(maxValueRUB).toLocaleString() : '∞'} ₽</div>
+                <div className="hidden group-open:block absolute z-50 mt-2 p-3 bg-white text-slate-700 rounded-lg shadow-xl border-2 border-red-200 text-xs whitespace-nowrap min-w-[200px]">
+                  <div className="font-bold text-red-600 mb-1">📦 渠道价格限制说明</div>
+                  <div className="text-slate-600 text-[11px]">
+                    该物流渠道对商品售价有限制，您的售价超出了允许范围。
+                  </div>
+                  <div className="mt-2 bg-red-50 p-2 rounded space-y-1">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500">您的售价:</span>
+                      <span className="font-semibold text-red-600">≈ {Math.round(priceRUB).toLocaleString()} ₽ (¥{input.targetPriceRMB})</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500">渠道要求:</span>
+                      <span className="font-semibold">
+                        {minValueRUB ? `${Math.round(minValueRUB).toLocaleString()}+` : '无下限'}
+                        {minValueRUB && maxValueRUB ? ' ~ ' : ''}
+                        {maxValueRUB ? `${Math.round(maxValueRUB).toLocaleString()}` : '无上限'} ₽
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-2 text-slate-500 text-[10px] border-t pt-2">
+                    💡 <span className="font-medium">解决方法：</span>
+                    <div>• 调整售价至允许范围内</div>
+                    <div>• 或更换其他物流渠道</div>
+                  </div>
                 </div>
               </details>
             </span>
