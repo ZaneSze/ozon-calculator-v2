@@ -269,7 +269,7 @@ export default function Home() {
   // 获取当前类目的佣金配置
   const commission = useMemo(
     () => getCommissionByCategory(input.primaryCategory, input.secondaryCategory),
-    [getCommissionByCategory, input.primaryCategory, input.secondaryCategory]
+    [input.primaryCategory, input.secondaryCategory]
   );
 
   // 🔹 计算实际汇率（扣除安全缓冲）
@@ -294,7 +294,7 @@ export default function Home() {
       input.hasLiquid, // 🔹 传入是否带液体
       input.designatedProvider // 🔹 传入指定物流商
     );
-  }, [getShippingChannels, input.length, input.width, input.height, input.weight, input.targetPriceRMB, effectiveExchangeRate, input.hasBattery, input.hasLiquid, input.designatedProvider]);
+  }, [input.length, input.width, input.height, input.weight, input.targetPriceRMB, effectiveExchangeRate, input.hasBattery, input.hasLiquid, input.designatedProvider]);
 
   // 🔹 推荐物流排序：按费用/时效/评分排序（定义在 channelCosts 之后，见下方）
 
