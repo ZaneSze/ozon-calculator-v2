@@ -173,3 +173,76 @@ body {
 html {
   scroll-behavior: smooth;
 }
+
+/* ========================================
+   Enhanced pulse animations - critical alerts
+   ======================================== */
+
+/* 强烈红色闪烁 - 致命错误/亏损 */
+@keyframes urgent-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7), 0 0 20px 5px rgba(239, 68, 68, 0.3);
+    border-color: #DC2626;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    border-color: #F87171;
+    transform: scale(1.02);
+  }
+}
+
+.animate-urgent-pulse {
+  animation: urgent-pulse 1s ease-in-out infinite;
+}
+
+/* 橙色强脉冲 - 计抛警告 */
+@keyframes warning-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7), 0 0 15px 3px rgba(245, 158, 11, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+    transform: scale(1.01);
+  }
+}
+
+.animate-warning-pulse {
+  animation: warning-pulse 1.2s ease-in-out infinite;
+}
+
+/* 快速闪烁 - 超紧急 */
+@keyframes critical-flash {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.9), 0 0 25px 8px rgba(220, 38, 38, 0.5);
+  }
+  25% {
+    opacity: 0.8;
+    box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.5);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.9);
+  }
+  75% {
+    opacity: 0.9;
+    box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.5);
+  }
+}
+
+.animate-critical-flash {
+  animation: critical-flash 0.8s ease-in-out infinite;
+}
+
+/* 震动效果 - 吸引注意 */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-1px); }
+  20%, 40%, 60%, 80% { transform: translateX(1px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out infinite;
+}

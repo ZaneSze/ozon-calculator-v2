@@ -89,7 +89,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             ⏱ {channel.deliveryTimeMin || 15}-{channel.deliveryTimeMax || 30} 天
           </span>
           {showVolumetricLabel && isAvailable && (
-            <span className="animate-pulse bg-[#F59E0B] text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg ring-2 ring-[#F59E0B]/30">
+            <span className="animate-warning-pulse bg-amber-500 text-white text-[11px] px-2.5 py-1 rounded-full font-bold shadow-lg ring-2 ring-amber-400">
               ⚠️ 触发计抛
             </span>
           )}

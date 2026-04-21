@@ -886,23 +886,23 @@ export default function Home() {
           overflowY: 'auto'
         }}
       >
-        {/* 🔴 致命错误 - 无可用渠道（唯一）- 强烈警告 */}
+        {/* 🔴 致命错误 - 无可用渠道（唯一）- 强烈警报 */}
         {shippingChannels.available.length === 0 && shippingData.length > 0 && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-sm font-bold bg-red-600 text-white border-2 border-red-800 shadow-lg animate-pulse ring-2 ring-red-400">
-            <AlertCircle className="h-4 w-4" />
-            <span>致命：商品尺寸/重量/属性无法匹配任何物流渠道</span>
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-5 py-2 rounded-full text-base font-extrabold bg-red-600 text-white border-4 border-red-800 shadow-2xl animate-critical-flash">
+            <AlertCircle className="h-5 w-5" />
+            <span>🚨 致命：商品尺寸/重量/属性无法匹配任何物流渠道</span>
           </span>
         )}
         
-        {/* 🔴 阻断错误 - 亏损（唯一）- 醒目红色 */}
+        {/* 🔴 阻断错误 - 亏损（唯一）- 强烈红色闪烁 */}
         {result.netProfit < 0 && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-red-100 text-red-700 border-2 border-red-300 animate-pulse">
-            <span className="text-lg">❌</span>
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-extrabold bg-red-500 text-white border-3 border-red-700 shadow-xl animate-urgent-pulse">
+            <span className="text-xl">❌</span>
             <span>亏损: ¥{Math.abs(result.netProfit).toFixed(2)}</span>
           </span>
         )}
         
-        {/* 尺寸/重量超限（唯一）- 红色边框 */}
+        {/* 尺寸/重量超限（唯一）- 红色边框脉冲 */}
         {(() => {
           const sumDim = input.length + input.width + input.height;
           const maxSide = Math.max(input.length, input.width, input.height);
@@ -910,8 +910,8 @@ export default function Home() {
           const weightEx = shippingChannels.available.find(ch => ch.maxWeight && input.weight > ch.maxWeight);
           if (dimEx || weightEx) {
             return (
-              <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-red-50 text-red-700 border-2 border-red-300">
-                <span>⚠️</span>
+              <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-bold bg-red-100 text-red-700 border-3 border-red-400 animate-urgent-pulse">
+                <span className="text-lg">⚠️</span>
                 <span>超限</span>
               </span>
             );
@@ -935,25 +935,25 @@ export default function Home() {
             .slice(0, 1); // 最多只显示一个货值拦截提示
           
           return uniqueValueBlocks.length > 0 ? (
-            <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-red-100 text-red-700 border-2 border-red-300">
+            <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-bold bg-red-500 text-white border-3 border-red-600 shadow-lg animate-urgent-pulse">
               <span>❌</span>
               <span>货值拦截</span>
             </span>
           ) : null;
         })()}
         
-        {/* ⚠️ 计抛预警 - 橙色醒目（唯一） */}
+        {/* ⚠️ 计抛预警 - 强烈橙色脉冲（唯一） */}
         {selectedBillingInfo?.isVolumetric && selectedBillingInfo.billingWeight > selectedBillingInfo.actualWeight && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-amber-100 text-amber-800 border-2 border-amber-400 animate-pulse">
-            <span>⚠️</span>
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-extrabold bg-amber-500 text-white border-3 border-amber-600 shadow-xl animate-warning-pulse">
+            <span className="text-lg">⚠️</span>
             <span>计抛: {selectedBillingInfo.billingWeight.toFixed(0)}g</span>
           </span>
         )}
         
-        {/* 广告超支（唯一） */}
+        {/* 广告超支 - 橙色警告 */}
         {result.adRiskControl?.isOverBudget && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-amber-100 text-amber-800 border-2 border-amber-400">
-            <span>⚠️</span>
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-bold bg-amber-100 text-amber-800 border-3 border-amber-400 shadow-lg animate-warning-pulse">
+            <span className="text-lg">⚠️</span>
             <span>广告超支</span>
           </span>
         )}
