@@ -90,7 +90,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           </span>
           {showVolumetricLabel && isAvailable && (
             <span className="animate-pulse bg-[#F59E0B] text-white text-[10px] px-2 py-0.5 rounded-full font-semibold shadow-sm">
-              ⚠️ 计抛
+              ⚠️ 触发计抛
             </span>
           )}
           {/* Ozon 评级标签 */}
@@ -102,31 +102,31 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           )}
         </div>
         <div className="text-xs text-muted-foreground font-medium">
-          {channel.serviceTier || '-'}
+          评分组: {channel.serviceTier || '-'}
         </div>
       </div>
 
       {/* 2. 标题与价格区 */}
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1">
-          <h3 className="text-sm font-semibold text-foreground leading-tight">
+          <h3 className="text-base font-bold text-foreground leading-tight">
             {channel.name}
           </h3>
           <div className="flex items-center gap-1.5 mt-1">
             <span className="text-[10px] bg-indigo-50 text-[#6366F1] px-1.5 py-0.5 rounded border border-indigo-100">
-              {channel.serviceLevel || '标准'}
+              {channel.serviceLevel || '标准服务'}
             </span>
-            <span className="text-[10px] text-muted-foreground">{channel.thirdParty || 'Ozon'}</span>
+            <span className="text-[10px] text-muted-foreground">{channel.thirdParty || 'Ozon网络'}</span>
           </div>
         </div>
         <div className="text-right">
-          <div className="text-lg font-semibold text-[#6366F1]">
+          <div className="text-xl font-bold text-[#6366F1]">
             ¥ {freightData.total.toFixed(2)}
           </div>
           {/* 原价仅在计抛时显示 */}
           {showVolumetricLabel && (
             <div className="text-[10px] text-muted-foreground line-through">
-              实重: ¥ {((billing?.actualWeight || 0) * channel.varFeePerGram + channel.fixFee).toFixed(2)}
+              实重价: ¥ {((billing?.actualWeight || 0) * channel.varFeePerGram + channel.fixFee).toFixed(2)}
             </div>
           )}
         </div>
@@ -139,14 +139,14 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
             : 'bg-red-50 text-red-400 border-red-100'
         }`}>
-          {limits.allowBattery ? '⚡ 带电' : '🚫 禁电'}
+          {limits.allowBattery ? '⚡ 支持带电' : '🚫 禁发带电'}
         </div>
         <div className={`flex-1 text-center py-1 rounded text-[10px] font-medium border ${
           limits.allowLiquid 
             ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
             : 'bg-red-50 text-red-400 border-red-100'
         }`}>
-          {limits.allowLiquid ? '💧 液体' : '🚫 禁液'}
+          {limits.allowLiquid ? '💧 支持液体' : '🚫 禁发液体'}
         </div>
       </div>
 
@@ -156,10 +156,10 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           <span className="opacity-70">⚖️ 限重:</span> <b className="text-foreground">{limits.minWt}-{fDim(limits.maxWt)}g</b>
         </div>
         <div className="text-[11px] text-muted-foreground">
-          <span className="opacity-70">📏 边长:</span> <b className="text-foreground">≤{fDim(limits.maxSide)}cm</b>
+          <span className="opacity-70">📏 边长:</span> <b className="text-foreground">最长边{fDim(limits.maxSide)}cm</b>
         </div>
         <div className="text-[11px] text-muted-foreground">
-          <span className="opacity-70">📐 三边:</span> <b className="text-foreground">≤{fDim(limits.maxSum)}cm</b>
+          <span className="opacity-70">📐 三边和:</span> <b className="text-foreground">{fDim(limits.maxSum)}cm</b>
         </div>
         <div className="text-[11px] text-muted-foreground">
           <span className="opacity-70">💰 货值:</span> <b className="text-foreground">{fPrice(limits.minPrice)}-{fPrice(limits.maxPrice)}₽</b>
@@ -170,7 +170,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
       <details className="mt-3 group">
         <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-[#6366F1] list-none flex items-center gap-1 select-none">
           <span className="group-open:rotate-180 transition-transform">▼</span> 
-          <span>计费重: {freightData.billingWeight}g</span>
+          <span>查看计费详情 (当前计费重: {freightData.billingWeight}g)</span>
         </summary>
         <div className="mt-2 text-[10px] text-muted-foreground bg-secondary p-2 rounded border border-dashed border-border space-y-1.5">
           {/* 实重 */}
@@ -183,7 +183,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             <span>抛重:</span>
             <span className={billing?.isVolumetric ? "text-[#F59E0B] font-medium" : ""}>
               {billing?.volumetricWeight?.toFixed(0) || 0}g
-              {billing?.isVolumetric && " ⚠️"}
+              {billing?.isVolumetric && " [触发]"}
             </span>
           </div>
           {/* 计费重高亮 */}
