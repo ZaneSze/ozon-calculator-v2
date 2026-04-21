@@ -710,41 +710,41 @@ export default function Home() {
           </div>
           
           {/* 中间：5个核心指标 - 绝对居中 */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-4 whitespace-nowrap">
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-6 whitespace-nowrap">
             {/* 净利 */}
-            <div className="flex flex-col items-center -space-y-0.5">
-              <span className={`text-base font-bold ${result.netProfit >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+            <div className="flex flex-col items-center">
+              <span className={`text-base font-semibold tabular-nums ${result.netProfit >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
                 ¥{result.netProfit.toFixed(1)}
               </span>
-              <span className="text-[9px] text-slate-400">净利</span>
+              <span className="text-[10px] text-muted-foreground font-medium">净利</span>
             </div>
             {/* ROI */}
-            <div className="flex flex-col items-center -space-y-0.5">
-              <span className={`text-base font-bold ${result.roi >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+            <div className="flex flex-col items-center">
+              <span className={`text-base font-semibold tabular-nums ${result.roi >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
                 {result.roi.toFixed(1)}%
               </span>
-              <span className="text-[9px] text-slate-400">ROI</span>
+              <span className="text-[10px] text-muted-foreground font-medium">ROI</span>
             </div>
             {/* 毛利率 */}
-            <div className="flex flex-col items-center -space-y-0.5">
-              <span className={`text-base font-bold ${result.profitMargin >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+            <div className="flex flex-col items-center">
+              <span className={`text-base font-semibold tabular-nums ${result.profitMargin >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
                 {result.profitMargin.toFixed(1)}%
               </span>
-              <span className="text-[9px] text-slate-400">毛利率</span>
+              <span className="text-[10px] text-muted-foreground font-medium">毛利率</span>
             </div>
             {/* 总成本 */}
-            <div className="flex flex-col items-center -space-y-0.5">
-              <span className="text-base font-bold text-slate-700">
+            <div className="flex flex-col items-center">
+              <span className="text-base font-semibold tabular-nums text-foreground">
                 ¥{result.costs.total.toFixed(1)}
               </span>
-              <span className="text-[9px] text-slate-400">成本</span>
+              <span className="text-[10px] text-muted-foreground font-medium">成本</span>
             </div>
             {/* 售价 */}
-            <div className="flex flex-col items-center -space-y-0.5 whitespace-nowrap">
-              <span className="text-base font-bold text-blue-600">
-                ¥{input.targetPriceRMB.toFixed(0)} <span className="text-slate-500 text-xs font-normal">(≈ {Math.round(input.targetPriceRMB * input.exchangeRate).toLocaleString()} ₽)</span>
+            <div className="flex flex-col items-center whitespace-nowrap">
+              <span className="text-base font-semibold tabular-nums text-[#6366F1]">
+                ¥{input.targetPriceRMB.toFixed(0)} <span className="text-muted-foreground text-xs font-normal">(≈ {Math.round(input.targetPriceRMB * input.exchangeRate).toLocaleString()} ₽)</span>
               </span>
-              <span className="text-[9px] text-slate-400">售价</span>
+              <span className="text-[10px] text-muted-foreground font-medium">售价</span>
             </div>
           </div>
           

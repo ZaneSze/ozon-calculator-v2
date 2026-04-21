@@ -108,14 +108,14 @@ export function MappingDebugPanel({ headers, sampleRows, visible, onClose }: Deb
                   </td>
                   <td className="p-2">
                     {d.matchedField ? (
-                      <span className="font-mono text-blue-600">{d.matchedField}</span>
+                      <span className="font-mono text-[#6366F1]">{d.matchedField}</span>
                     ) : (
-                      <span className="text-slate-400">-</span>
+                      <span className="text-muted-foreground">-</span>
                     )}
                   </td>
-                  <td className="p-2 font-mono text-slate-700">{d.header}</td>
-                  <td className="p-2 text-slate-600 max-w-[200px] truncate">{d.sampleValue}</td>
-                  <td className="p-2 font-mono text-slate-700">{d.parsedValue}</td>
+                  <td className="p-2 font-mono text-foreground">{d.header}</td>
+                  <td className="p-2 text-muted-foreground max-w-[200px] truncate">{d.sampleValue}</td>
+                  <td className="p-2 font-mono text-foreground">{d.parsedValue}</td>
                 </tr>
               ))}
             </tbody>

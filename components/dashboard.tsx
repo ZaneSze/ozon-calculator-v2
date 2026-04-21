@@ -93,7 +93,7 @@ interface DashboardProps {
   };
 }
 
-const COST_COLORS = ["#3b82f6", "#f59e0b", "#8b5cf6", "#ef4444", "#10b981", "#6366f1"];
+const COST_COLORS = ["#6366F1", "#F59E0B", "#8B5CF6", "#EF4444", "#10B981", "#EC4899"];
 
 export function Dashboard({
   result,

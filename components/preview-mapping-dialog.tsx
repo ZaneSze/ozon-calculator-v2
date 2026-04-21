@@ -176,11 +176,11 @@ export function PreviewMappingDialog({
         <div className="flex-1 overflow-y-auto space-y-4">
           {/* 步骤提示 */}
           <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full border border-blue-200">
-              <FileText className="h-4 w-4 text-blue-600" />
-              <span className="text-blue-700 font-medium">步骤1: 文件解析</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 rounded-full border border-indigo-200">
+              <FileText className="h-4 w-4 text-[#6366F1]" />
+              <span className="text-[#6366F1] font-medium">步骤1: 文件解析</span>
             </div>
-            <div className="text-gray-400">→</div>
+            <div className="text-muted-foreground">→</div>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-full border border-purple-200">
               <Sparkles className="h-4 w-4 text-purple-600" />
               <span className="text-purple-700 font-medium">步骤2: 动态映射</span>
@@ -365,8 +365,8 @@ export function PreviewMappingDialog({
           
           {/* 🔹 尺寸约束解析结果 */}
           {dataType === "shipping" && parsedData.parsedConstraints && parsedData.parsedConstraints.size > 0 && (
-            <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
-              <h3 className="font-bold mb-3 flex items-center gap-2 text-blue-900">
+            <div className="border rounded-lg p-4 bg-indigo-50/50 border-indigo-200">
+              <h3 className="font-semibold mb-3 flex items-center gap-2 text-[#6366F1]">
                 <Ruler className="h-4 w-4" />
                 尺寸约束解析结果
               </h3>
@@ -377,9 +377,9 @@ export function PreviewMappingDialog({
                   const channelName = row ? row[0] : `渠道 ${rowIndex + 1}`;
                   
                   return (
-                    <div key={rowKey} className="p-3 bg-white rounded border border-blue-100">
+                    <div key={rowKey} className="p-3 bg-card rounded border border-border">
                       <div className="font-medium mb-1">{channelName}</div>
-                      <div className="flex gap-4 text-xs text-gray-700">
+                      <div className="flex gap-4 text-xs text-foreground">
                         {constraints.maxSum !== null && (
                           <span className="flex items-center gap-1">
                             <CheckCircle2 className="h-3 w-3 text-green-600" />

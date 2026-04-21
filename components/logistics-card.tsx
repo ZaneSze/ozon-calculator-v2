@@ -74,105 +74,105 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
   return (
     <div 
       onClick={onClick}
-      className={`relative border rounded-xl p-4 mb-3 transition-all cursor-pointer ${
+      className={`relative border rounded-lg p-4 mb-2 transition-all cursor-pointer ${
         !isAvailable 
-          ? 'bg-gray-50 opacity-60 border-gray-200' 
+          ? 'bg-secondary opacity-60 border-border' 
           : isSelected 
-            ? 'bg-blue-50 border-blue-400 shadow-lg ring-2 ring-blue-200' 
-            : 'bg-white hover:shadow-lg border-blue-100'
+            ? 'bg-indigo-50/50 border-[#6366F1] shadow-md ring-1 ring-[#6366F1]/20' 
+            : 'bg-card hover:shadow-md border-border'
       }`}
     >
       {/* 1. 顶部状态栏：时效 + 计抛强提醒 + Ozon 评级 */}
       <div className="flex justify-between items-center mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+          <span className="text-xs font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded">
             ⏱ {channel.deliveryTimeMin || 15}-{channel.deliveryTimeMax || 30} 天
           </span>
           {showVolumetricLabel && isAvailable && (
-            <span className="animate-pulse bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black shadow-sm">
-              ⚠️ 触发计抛
+            <span className="animate-pulse bg-[#F59E0B] text-white text-[10px] px-2 py-0.5 rounded-full font-semibold shadow-sm">
+              ⚠️ 计抛
             </span>
           )}
           {/* Ozon 评级标签 */}
           {channel.ozonRating > 0 && (
-            <div className="flex items-center gap-1 bg-yellow-50 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-yellow-200">
+            <div className="flex items-center gap-1 bg-yellow-50 text-yellow-700 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-yellow-200">
               <span className="text-yellow-500">★</span>
               <span>{channel.ozonRating.toFixed(1)}</span>
             </div>
           )}
         </div>
-        <div className="text-xs text-slate-400 font-medium">
-          评分组: {channel.serviceTier || '-'}
+        <div className="text-xs text-muted-foreground font-medium">
+          {channel.serviceTier || '-'}
         </div>
       </div>
 
       {/* 2. 标题与价格区 */}
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1">
-          <h3 className="text-base font-black text-slate-800 leading-tight">
+          <h3 className="text-sm font-semibold text-foreground leading-tight">
             {channel.name}
           </h3>
           <div className="flex items-center gap-1.5 mt-1">
-            <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100">
-              {channel.serviceLevel || '标准服务'}
+            <span className="text-[10px] bg-indigo-50 text-[#6366F1] px-1.5 py-0.5 rounded border border-indigo-100">
+              {channel.serviceLevel || '标准'}
             </span>
-            <span className="text-[10px] text-slate-400">{channel.thirdParty || 'Ozon网络'}</span>
+            <span className="text-[10px] text-muted-foreground">{channel.thirdParty || 'Ozon'}</span>
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xl font-black text-blue-600">
+          <div className="text-lg font-semibold text-[#6366F1]">
             ¥ {freightData.total.toFixed(2)}
           </div>
           {/* 原价仅在计抛时显示 */}
           {showVolumetricLabel && (
-            <div className="text-[10px] text-slate-400 line-through">
-              实重价: ¥ {((billing?.actualWeight || 0) * channel.varFeePerGram + channel.fixFee).toFixed(2)}
+            <div className="text-[10px] text-muted-foreground line-through">
+              实重: ¥ {((billing?.actualWeight || 0) * channel.varFeePerGram + channel.fixFee).toFixed(2)}
             </div>
           )}
         </div>
       </div>
 
       {/* 3. 特货属性横条 */}
-      <div className="flex gap-2 mb-4">
-        <div className={`flex-1 text-center py-1 rounded text-[10px] font-bold border ${
+      <div className="flex gap-2 mb-3">
+        <div className={`flex-1 text-center py-1 rounded text-[10px] font-medium border ${
           limits.allowBattery 
-            ? 'bg-green-50 text-green-600 border-green-100' 
-            : 'bg-red-50 text-red-300 border-red-100'
+            ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+            : 'bg-red-50 text-red-400 border-red-100'
         }`}>
-          {limits.allowBattery ? '⚡ 支持带电' : '🚫 禁发带电'}
+          {limits.allowBattery ? '⚡ 带电' : '🚫 禁电'}
         </div>
-        <div className={`flex-1 text-center py-1 rounded text-[10px] font-bold border ${
+        <div className={`flex-1 text-center py-1 rounded text-[10px] font-medium border ${
           limits.allowLiquid 
-            ? 'bg-green-50 text-green-600 border-green-100' 
-            : 'bg-red-50 text-red-300 border-red-100'
+            ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+            : 'bg-red-50 text-red-400 border-red-100'
         }`}>
-          {limits.allowLiquid ? '💧 支持液体' : '🚫 禁发液体'}
+          {limits.allowLiquid ? '💧 液体' : '🚫 禁液'}
         </div>
       </div>
 
-      {/* 4. 限制矩阵 (核心：数据读取 channel limits) */}
-      <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-        <div className="text-[11px] text-slate-500">
-          <span className="opacity-70">⚖️ 限重:</span> <b className="text-slate-700">{limits.minWt}-{fDim(limits.maxWt)}g</b>
+      {/* 4. 限制矩阵 */}
+      <div className="grid grid-cols-2 gap-2 bg-secondary p-2.5 rounded border border-border">
+        <div className="text-[11px] text-muted-foreground">
+          <span className="opacity-70">⚖️ 限重:</span> <b className="text-foreground">{limits.minWt}-{fDim(limits.maxWt)}g</b>
         </div>
-        <div className="text-[11px] text-slate-500">
-          <span className="opacity-70">📏 边长:</span> <b className="text-slate-700">最长边{fDim(limits.maxSide)}cm</b>
+        <div className="text-[11px] text-muted-foreground">
+          <span className="opacity-70">📏 边长:</span> <b className="text-foreground">≤{fDim(limits.maxSide)}cm</b>
         </div>
-        <div className="text-[11px] text-slate-500">
-          <span className="opacity-70">📐 三边和:</span> <b className="text-slate-700">{fDim(limits.maxSum)}cm</b>
+        <div className="text-[11px] text-muted-foreground">
+          <span className="opacity-70">📐 三边:</span> <b className="text-foreground">≤{fDim(limits.maxSum)}cm</b>
         </div>
-        <div className="text-[11px] text-slate-500">
-          <span className="opacity-70">💰 货值:</span> <b className="text-slate-700">{fPrice(limits.minPrice)}-{fPrice(limits.maxPrice)}₽</b>
+        <div className="text-[11px] text-muted-foreground">
+          <span className="opacity-70">💰 货值:</span> <b className="text-foreground">{fPrice(limits.minPrice)}-{fPrice(limits.maxPrice)}₽</b>
         </div>
       </div>
 
       {/* 5. 计费详情 (默认折叠) */}
       <details className="mt-3 group">
-        <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-blue-500 list-none flex items-center gap-1 select-none">
+        <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-[#6366F1] list-none flex items-center gap-1 select-none">
           <span className="group-open:rotate-180 transition-transform">▼</span> 
-          <span>查看计费详情 (当前计费重: {freightData.billingWeight}g)</span>
+          <span>计费重: {freightData.billingWeight}g</span>
         </summary>
-        <div className="mt-2 text-[10px] text-slate-500 bg-white p-2 rounded border border-dashed border-slate-200 space-y-1.5">
+        <div className="mt-2 text-[10px] text-muted-foreground bg-secondary p-2 rounded border border-dashed border-border space-y-1.5">
           {/* 实重 */}
           <div className="flex justify-between">
             <span>实重:</span>
@@ -181,20 +181,20 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           {/* 抛重 */}
           <div className="flex justify-between">
             <span>抛重:</span>
-            <span className={billing?.isVolumetric ? "text-orange-600 font-medium" : ""}>
+            <span className={billing?.isVolumetric ? "text-[#F59E0B] font-medium" : ""}>
               {billing?.volumetricWeight?.toFixed(0) || 0}g
-              {billing?.isVolumetric && " [触发]"}
+              {billing?.isVolumetric && " ⚠️"}
             </span>
           </div>
           {/* 计费重高亮 */}
-          <div className="flex justify-between font-bold pt-1 border-t border-slate-100">
+          <div className="flex justify-between font-semibold pt-1 border-t border-border">
             <span>计费重:</span>
-            <span className={billing?.isVolumetric ? "text-red-600" : "text-slate-700"}>
+            <span className={billing?.isVolumetric ? "text-[#EF4444]" : "text-foreground"}>
               {billing?.billingWeight?.toFixed(0) || 0}g
             </span>
           </div>
           {/* 计算公式 */}
-          <div className="pt-1 border-t border-slate-100 text-[9px] text-slate-400">
+          <div className="pt-1 border-t border-border text-[9px] opacity-70">
             {freightData.formula}
           </div>
           
@@ -227,7 +227,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
 
       {/* 选中徽章 */}
       {isSelected && (
-        <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md z-10">
+        <div className="absolute -top-2 -right-2 bg-[#6366F1] text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm z-10">
           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>
