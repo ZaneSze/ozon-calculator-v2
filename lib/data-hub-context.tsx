@@ -988,29 +988,43 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
         
         // ========== 六维绝对拦截引擎（读取 interceptionConfig 判断是否启用） ==========
         
-        // 维度一：货值拦截 (Value Limit) - 仅当启用时
-        if (interceptionConfig.maxValueRUB !== false) {
+        // 维度一：货值拦截 (Value Limit) - 仅当渠道有明确的货值限制时
+        // 只有当渠道真正设置了 minValueRUB 或 maxValueRUB 时才拦截
+        const hasValueLimit = channel.minValueRUB !== undefined || channel.maxValueRUB !== undefined;
+        const effectiveMaxValueRUB = channel.maxValueRUB ?? channel.maxValue ? Math.max(channel.maxValueRUB || 0, (channel.maxValue || 0) * exchangeRate) : 0;
+        
+        if (hasValueLimit && effectiveMaxValueRUB > 0) {
           const channelMinValueRMB = channel.minValueRUB ? channel.minValueRUB * exchangeRate : 0;
-          const channelMaxValueRMB = channel.maxValueRUB ? channel.maxValueRUB * exchangeRate : channel.maxValue;
+          const channelMaxValueRMB = effectiveMaxValueRUB * exchangeRate;
           
-          // 检查货值下限（评分组匹配）
-          if (channel.minValueRUB && priceRUB < channel.minValueRUB) {
-            reasons.push(`❌ 评分组货值不符 (当前 ${Math.round(priceRUB)}₽ 不在 ${channel.minValueRUB}-${channel.maxValueRUB}₽ 范围内)`);
+          // 检查货值下限（评分组匹配）- 需要同时满足上下限才校验
+          if (channel.minValueRUB && channel.maxValueRUB && (priceRUB < channel.minValueRUB || priceRUB > channel.maxValueRUB)) {
+            reasons.push(`❌ 货值不符: ${Math.round(priceRUB)}₽ 不在 ${channel.minValueRUB}-${channel.maxValueRUB}₽ 范围`);
             interceptionReasons.push({
               dimension: "货值",
               code: "VALUE_TOO_LOW",
-              message: `商品售价低于评分组货值下限`,
+              message: `商品售价不在渠道货值范围内`,
               details: `当前 ${priceRUB.toFixed(0)}₽ 不在 ${channel.minValueRUB}-${channel.maxValueRUB}₽ 范围内`
             });
           }
-          // 检查货值上限
-          else if (priceRMB > channelMaxValueRMB) {
-            reasons.push(`🚫 货值拦截: ¥${priceRMB.toFixed(0)} > ¥${channelMaxValueRMB.toFixed(0)} (渠道上限)`);
+          // 仅检查上限（当没有下限时）
+          else if (!channel.minValueRUB && channel.maxValueRUB && priceRUB > channel.maxValueRUB) {
+            reasons.push(`🚫 货值超限: ${Math.round(priceRUB)}₽ > ${channel.maxValueRUB}₽`);
             interceptionReasons.push({
               dimension: "货值",
               code: "VALUE_LIMIT",
               message: `商品售价超出渠道货值上限`,
-              details: `商品 ¥${priceRMB.toFixed(0)} > 渠道 ¥${channelMaxValueRMB.toFixed(0)}`
+              details: `商品 ${priceRUB.toFixed(0)}₽ > 渠道 ${channel.maxValueRUB}₽`
+            });
+          }
+          // 仅检查下限（当没有上限时）  
+          else if (channel.minValueRUB && !channel.maxValueRUB && priceRUB < channel.minValueRUB) {
+            reasons.push(`❌ 货值不足: ${Math.round(priceRUB)}₽ < ${channel.minValueRUB}��`);
+            interceptionReasons.push({
+              dimension: "货值",
+              code: "VALUE_TOO_LOW",
+              message: `商品售价低于渠道货值下限`,
+              details: `商品 ${priceRUB.toFixed(0)}₽ < 渠道 ${channel.minValueRUB}₽`
             });
           }
         }
