@@ -177,11 +177,13 @@ export default function Home() {
   
   // 🔹 自动获取汇率
   const [isFetchingRate, setIsFetchingRate] = useState(false);
+  const [rateFetchError, setRateFetchError] = useState<string | null>(null);
   // 🔹 利润率锁定状态：null=未锁定, 数字=锁定的利润率值(%)
   const [lockedMargin, setLockedMargin] = useState<number | null>(null);
   
   const fetchExchangeRate = useCallback(async () => {
     setIsFetchingRate(true);
+    setRateFetchError(null);
     try {
       const response = await fetch('https://open.er-api.com/v6/latest/RUB');
       if (!response.ok) throw new Error('汇率API请求失败');
@@ -193,6 +195,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error('获取汇率失败:', error);
+      setRateFetchError('无法获取实时汇率，请手动输入');
     } finally {
       setIsFetchingRate(false);
     }
@@ -378,8 +381,8 @@ export default function Home() {
     return calculateSixTierPricing(effectiveInput, commission, selectedChannel || undefined);
   }, [effectiveInput, commission, selectedChannel]);
 
-  // 计算总固定成本
-  const computeTotalFixedCost = useCallback(() => {
+  // 🔹 优化：共享的总固定成本计算 - 避免重复计算
+  const totalFixedCostData = useMemo(() => {
     const chargeableWeight = getChargeableWeight(effectiveInput.length, effectiveInput.width, effectiveInput.height, effectiveInput.weight, selectedChannel || undefined).chargeable;
     const internationalShipping = selectedChannel ? calculateShippingCost(selectedChannel, chargeableWeight) : 0;
     const rate = effectiveInput.returnRate / 100;
@@ -398,6 +401,9 @@ export default function Home() {
     };
   }, [effectiveInput, selectedChannel]);
 
+  // 保留向后兼容的回调（供外部组件使用）
+  const computeTotalFixedCost = useCallback(() => totalFixedCostData, [totalFixedCostData]);
+
   // 利润曲线数据 — X轴为 RMB 售价
   const profitCurve = useMemo(() => {
     if (!commission) return [];
@@ -408,16 +414,16 @@ export default function Home() {
     for (let p = minPrice; p <= maxPrice; p += step) {
       priceRangeRMB.push(parseFloat(p.toFixed(2)));
     }
-    const { totalFixedCost, cpaRateForM } = computeTotalFixedCost();
+    const { totalFixedCost, cpaRateForM } = totalFixedCostData;
     return calculateProfitCurve(priceRangeRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, totalFixedCost);
-  }, [commission, effectiveInput, computeTotalFixedCost]);
+  }, [commission, effectiveInput, totalFixedCostData]);
 
   // 汇率抗压测试
   const stressTest = useMemo(() => {
     if (!commission) return { at5PercentDrop: 0, at10PercentDrop: 0, zeroProfitRate: 0 };
-    const { totalFixedCost, cpaRateForM } = computeTotalFixedCost();
+    const { totalFixedCost, cpaRateForM } = totalFixedCostData;
     return calculateExchangeRateStressTest(effectiveInput.targetPriceRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, totalFixedCost);
-  }, [commission, effectiveInput, computeTotalFixedCost]);
+  }, [commission, effectiveInput, totalFixedCostData]);
 
   // 多件装利润
   const multiItemProfit = useMemo(() => {
@@ -805,17 +811,37 @@ export default function Home() {
                 step="0.001"
                 min="0.001"
                 value={input.exchangeRate}
-                onChange={(e) => setInput(prev => ({ ...prev, exchangeRate: parseFloat(e.target.value) || 12.0 }))}
+                onChange={(e) => {
+                  setInput(prev => ({ ...prev, exchangeRate: parseFloat(e.target.value) || 12.0 }));
+                  setRateFetchError(null);
+                }}
                 className="w-[70px] h-6 text-xs bg-white px-2"
+                aria-invalid={!!rateFetchError}
+                aria-describedby="rate-error"
               />
               <span className="text-[10px] text-slate-400">₽</span>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={fetchExchangeRate} disabled={isFetchingRate} title="获取汇率" aria-label="获取汇率">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 w-6 p-0" 
+                onClick={fetchExchangeRate} 
+                disabled={isFetchingRate} 
+                title="获取汇率" 
+                aria-label="刷新汇率"
+              >
                 <RefreshCw className={`h-3 w-3 ${isFetchingRate ? "animate-spin" : ""}`} />
               </Button>
-              {/* 辅助提示：当前反向换算 */}
-              <div className="flex flex-col -space-y-0.5">
-                <span className="text-[9px] text-slate-400 whitespace-nowrap">1 RUB ≈ {(1/input.exchangeRate).toFixed(4)}¥</span>
-              </div>
+              {/* 汇率错误提示 */}
+              {rateFetchError ? (
+                <span id="rate-error" className="text-[9px] text-red-500 whitespace-nowrap" role="alert">
+                  ⚠️
+                </span>
+              ) : (
+                /* 辅助提示：当前反向换算 */
+                <div className="flex flex-col -space-y-0.5">
+                  <span className="text-[9px] text-slate-400 whitespace-nowrap">1 RUB ≈ {(1/input.exchangeRate).toFixed(4)}¥</span>
+                </div>
+              )}
             </div>
             
             {/* 提现手续费 - 扁平紧凑 */}

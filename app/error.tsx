@@ -29,6 +29,7 @@ export default function Error({
         <button
           onClick={reset}
           className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          aria-label="重新加载页面"
         >
           重新加载
         </button>
