@@ -68,7 +68,7 @@ export interface CalculationInput {
   weight: number; // g
   hasBattery: boolean; // 🔹 是否带电
   hasLiquid: boolean; // 🔹 是否带液体
-  designatedProvider: string; // 🔹 指定物流商，为空表示全部
+  designatedProviders: string[]; // 🔹 指定物流商数组，为空表示全部
   
   // 成本参数
   purchaseCost: number; // RMB
@@ -95,8 +95,10 @@ export interface CalculationInput {
   withdrawalFee: number; // 百分比
   exchangeRateBuffer: number; // 汇率安全缓冲百分比（默认0，用于规避结汇风险）
   
-  // 经营模拟
-  competitorPriceRMB?: number; // 竞品售价 (RMB)，用于跟价模拟
+// 经营模拟
+  rivalPrice?: number; // 竞品售价
+  rivalCurrency?: 'RMB' | 'RUB'; // 竞品售价货币模式
+  profitWarningThreshold?: number | null; // 利润率预警阈值
   multiItemCount: number; // 单单购买数量，默认1
   
   // 税务设置

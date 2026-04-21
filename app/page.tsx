@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalculationInput, ShippingChannel } from "@/lib/types";
+import { CalculationInput, ShippingChannel, CalculationResult } from "@/lib/types";
 import {
   performFullCalculation,
   calculateProfitCurve,
@@ -46,7 +46,7 @@ const DEFAULT_INPUT: CalculationInput = {
   weight: 300,
   hasBattery: false, // 🔹 是否带电，默认否
   hasLiquid: false, // 🔹 是否带液体，默认否
-  designatedProvider: "", // 🔹 指定物流商，为空表示全部
+  designatedProviders: [], // 🔹 指定物流商数组
   purchaseCost: 30,
   domesticShipping: 3,
   packagingFee: 2,
@@ -62,7 +62,8 @@ const DEFAULT_INPUT: CalculationInput = {
   exchangeRate: 12.0, // 1 CNY = 12 RUB
   withdrawalFee: 1.5,
   exchangeRateBuffer: 0, // 汇率安全缓冲：默认0%
-  competitorPriceRMB: 0, // 竞品售价
+  rivalPrice: 0, // 竞品售价
+  rivalCurrency: 'RMB' as const, // 竞品售价货币模式
   multiItemCount: 1, // 单单购买数量
   taxEnabled: false, // 税务核算默认关闭
   vatRate: 13, // 增值税率 13%
@@ -80,8 +81,20 @@ function supportsVolumetricBilling(channel: ShippingChannel): boolean {
 }
 
 // 🔹 工具函数：下载模板 CSV
-function downloadTemplate(type: "commission" | "shipping") {
-  if (type === "shipping") {
+function downloadTemplate(type: "commission" | "shipping" | "batch") {
+  if (type === "batch") {
+    // 批量计算模板
+    const template = `SKU编号,一级类目,二级类目,长度(cm),宽度(cm),高度(cm),重量(g),采购成本(RMB),头程(RMB),包装(RMB),是否带电,是,是否带液体,是,目标售价(RMB),备注
+SKU001,电子产品,手机配件,10,8,5,150,25,3,2,否,否,125,
+SKU002,电子产品,充电器,5,5,3,80,10,1,否,否,50,`;
+    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ozon_batch_template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  } else if (type === "shipping") {
     const template = `配送方式,第三方物流,服务等级,固定费(RMB),续重费(RMB/g),最小重量(g),最大重量(g),最大长度(cm),最大宽度(cm),最大高度(cm),边长总和(cm),时效(天),计费类型,体积重除数
 中国邮政小包,邮政,Economy,2.00,0.063,0,2000,60,60,60,150,25-35,取大,12000
 顺丰国际,顺丰,Express,5.00,0.080,0,3000,60,60,60,120,10-15,取大,8000`;
@@ -104,6 +117,70 @@ function downloadTemplate(type: "commission" | "shipping") {
     link.click();
     URL.revokeObjectURL(url);
   }
+}
+
+// 🔹 批量计算结果类型
+interface BatchResultItem {
+  sku: string;
+  input: CalculationInput;
+  channel: ShippingChannel;
+  result: CalculationResult;
+  profit: number;
+  profitMargin: number;
+}
+
+// 🔹 批量计算解析函数
+function parseBatchInput(csvContent: string): Partial<CalculationInput>[] {
+  const lines = csvContent.trim().split('\n');
+  if (lines.length < 2) return [];
+  
+  const headers = lines[0].split(',').map(h => h.trim());
+  const rows: Partial<CalculationInput>[] = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',');
+    if (values.length < headers.length) continue;
+    
+    const row: Partial<CalculationInput> = {};
+    headers.forEach((header, idx) => {
+      const value = values[idx]?.trim() || '';
+      const key = header.toLowerCase();
+      
+      if (key.includes('sku') || key.includes('编号')) {
+        // SKU 编号单独处理
+      } else if (key.includes('长度')) {
+        row.length = parseFloat(value) || 0;
+      } else if (key.includes('宽度')) {
+        row.width = parseFloat(value) || 0;
+      } else if (key.includes('高度')) {
+        row.height = parseFloat(value) || 0;
+      } else if (key.includes('重量')) {
+        row.weight = parseFloat(value) || 0;
+      } else if (key.includes('采购')) {
+        row.purchaseCost = parseFloat(value) || 0;
+      } else if (key.includes('头程')) {
+        row.domesticShipping = parseFloat(value) || 0;
+      } else if (key.includes('包装')) {
+        row.packagingFee = parseFloat(value) || 0;
+      } else if (key.includes('带电')) {
+        row.hasBattery = value === '是';
+      } else if (key.includes('液体')) {
+        row.hasLiquid = value === '是';
+      } else if (key.includes('售价')) {
+        row.targetPriceRMB = parseFloat(value) || 0;
+      } else if (key.includes('一级')) {
+        row.primaryCategory = value;
+      } else if (key.includes('二级')) {
+        row.secondaryCategory = value;
+      }
+    });
+    
+    if (row.primaryCategory || row.targetPriceRMB) {
+      rows.push(row);
+    }
+  }
+  
+  return rows;
 }
 
 // 🔹 工具函数：导出配置
@@ -180,6 +257,24 @@ export default function Home() {
   const [rateFetchError, setRateFetchError] = useState<string | null>(null);
   // 🔹 利润率锁定状态：null=未锁定, 数字=锁定的利润率值(%)
   const [lockedMargin, setLockedMargin] = useState<number | null>(null);
+  
+  // 🔹 渠道收藏夹
+  const [favoriteChannels, setFavoriteChannels] = useState<string[]>([]);
+  
+  // 加载收藏夹
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ozon-favorite-channels");
+      if (saved) {
+        setFavoriteChannels(JSON.parse(saved));
+      }
+    } catch {}
+  }, []);
+  
+  // 🔹 批量计算状态
+  const [batchResults, setBatchResults] = useState<BatchResultItem[]>([]);
+  const [isBatchCalculating, setIsBatchCalculating] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
   
   const fetchExchangeRate = useCallback(async () => {
     setIsFetchingRate(true);
@@ -281,8 +376,14 @@ export default function Home() {
   }, [input.exchangeRate]);
 
   // 获取可用物流渠道 — 需要将 RMB 转为 RUB 传入（使用实际汇率）
-  const shippingChannels = useMemo(() => {
+  const selectedProviders = input.designatedProviders || [];
+  const isFavoritesFilter = selectedProviders.includes("__favorites__");
+  const providers = selectedProviders.filter(p => p && p !== "__favorites__");
+  
+  const baseShippingChannels = useMemo(() => {
     const priceRUB = effectiveExchangeRate > 0 ? input.targetPriceRMB / effectiveExchangeRate : 0;
+    // 转换为逗号分隔的字符串（空表示全部）
+    const providerStr = providers.length > 0 ? providers.join(",") : "";
     return getShippingChannels(
       input.length,
       input.width,
@@ -292,9 +393,22 @@ export default function Home() {
       effectiveExchangeRate,
       input.hasBattery, // 🔹 传入是否带电
       input.hasLiquid, // 🔹 传入是否带液体
-      input.designatedProvider // 🔹 传入指定物流商
+      providerStr // 🔹 使用物流商筛选
     );
-  }, [input.length, input.width, input.height, input.weight, input.targetPriceRMB, effectiveExchangeRate, input.hasBattery, input.hasLiquid, input.designatedProvider]);
+  }, [input.length, input.width, input.height, input.weight, input.targetPriceRMB, effectiveExchangeRate, input.hasBattery, input.hasLiquid, providers]);
+  
+  // 🔹 应用收藏夹筛选
+  const shippingChannels = useMemo(() => {
+    if (isFavoritesFilter) {
+      // 收藏夹：合并所有渠道后显示
+      const allFavorites = shippingData.filter(ch => favoriteChannels.includes(ch.id));
+      return {
+        available: allFavorites,
+        unavailable: [],
+      };
+    }
+    return baseShippingChannels;
+  }, [baseShippingChannels, isFavoritesFilter, favoriteChannels, shippingData]);
 
   // 🔹 推荐物流排序：按费用/时效/评分排序（定义在 channelCosts 之后，见下方）
 
@@ -443,6 +557,17 @@ export default function Home() {
     setLockedChannelId(null);
     setSelectedChannelId(null);
     localStorage.removeItem("ozon-locked-channel");
+  }, []);
+  
+  // 🔹 切换渠道收藏
+  const handleToggleFavorite = useCallback((channelId: string) => {
+    setFavoriteChannels(prev => {
+      const newFavorites = prev.includes(channelId)
+        ? prev.filter(id => id !== channelId)
+        : [...prev, channelId];
+      localStorage.setItem("ozon-favorite-channels", JSON.stringify(newFavorites));
+      return newFavorites;
+    });
   }, []);
 
   // 逆向推价：根据目标利润率反推售价
@@ -991,6 +1116,14 @@ export default function Home() {
           </span>
         )}
         
+        {/* 🔹 利润预警 - 低于阈值时显示 */}
+        {input.profitWarningThreshold !== null && input.profitWarningThreshold !== undefined && result.profitMargin < input.profitWarningThreshold && (
+          <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-bold bg-red-100 text-red-800 border-3 border-red-400 shadow-lg animate-warning-pulse">
+            <span className="text-lg">⚠️</span>
+            <span>利润 {result.profitMargin.toFixed(1)}% &lt; 阈值 {input.profitWarningThreshold}%</span>
+          </span>
+        )}
+        
         {/* 💡 建议 Tips - 紫色提示（唯一） */}
         {(() => {
           const uniqueSuggestions = Array.from(new Set(result.suggestions.slice(0, 2)));
@@ -1036,6 +1169,8 @@ export default function Home() {
               <InputPanel
                 input={input}
                 onInputChange={handleInputChange}
+                rivalPrice={input.rivalPrice}
+                rivalCurrency={input.rivalCurrency}
                 currentProfitMargin={result.profitMargin}
                 onReversePriceFromMargin={handleReversePriceFromMargin}
                 marginError={marginError}
@@ -1053,6 +1188,9 @@ export default function Home() {
             <Dashboard
               result={result}
               input={input}
+              rivalPrice={input.rivalPrice}
+              rivalCurrency={input.rivalCurrency}
+              profitWarningThreshold={input.profitWarningThreshold}
               shippingChannels={shippingChannels}
               allShippingChannels={shippingData}
               selectedChannel={selectedChannel}
@@ -1080,22 +1218,56 @@ export default function Home() {
                   可用 {shippingChannels.available.length} / 总计 {shippingChannels.available.length + shippingChannels.unavailable.length}
                 </span>
               </div>
-              {/* 物流下拉筛选 */}
-              <div className="flex items-center gap-2">
-                <Select 
-                  value={input.designatedProvider || "全部"} 
-                  onValueChange={(value) => handleInputChange({ ...input, designatedProvider: value === "全部" ? "" : value })}
+              {/* 物流多选筛选 */}
+              <div className="flex flex-wrap gap-1">
+                <button
+                  onClick={() => handleInputChange({ ...input, designatedProviders: [] })}
+                  className={`px-2 py-1 rounded text-xs transition-all ${
+                    (input.designatedProviders || []).length === 0 
+                      ? "bg-blue-500 text-white" 
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                  }`}
                 >
-                  <SelectTrigger className="h-8 text-xs flex-1">
-                    <SelectValue placeholder="全部物流商" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="全部">全部物流商</SelectItem>
-                    {[...new Set(shippingData.map(ch => ch.thirdParty).filter(Boolean))].sort().map(provider => (
-                      <SelectItem key={provider} value={provider}>{provider}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  全部
+                </button>
+                {/* 🔹 收藏夹筛选 */}
+                {favoriteChannels.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const current = input.designatedProviders || [];
+                      const newProviders = current.includes("__favorites__")
+                        ? current.filter(p => p !== "__favorites__")
+                        : [...current.filter(p => p !== "__favorites__"), "__favorites__"];
+                      handleInputChange({ ...input, designatedProviders: newProviders });
+                    }}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      (input.designatedProviders || []).includes("__favorites__")
+                        ? "bg-yellow-500 text-white" 
+                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    }`}
+                  >
+                    ⭐ 收藏
+                  </button>
+                )}
+                {[...new Set(shippingData.map(ch => ch.thirdParty).filter(Boolean))].sort().map(provider => (
+                  <button
+                    key={provider}
+                    onClick={() => {
+                      const current = input.designatedProviders || [];
+                      const newProviders = current.includes(provider)
+                        ? current.filter(p => p !== provider)
+                        : [...current, provider];
+                      handleInputChange({ ...input, designatedProviders: newProviders });
+                    }}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      (input.designatedProviders || []).includes(provider)
+                        ? "bg-indigo-500 text-white" 
+                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    }`}
+                  >
+                    {provider}
+                  </button>
+                ))}
               </div>
               {/* 🔹 推荐排序切换 */}
               <div className="flex items-center gap-1 mt-2">
@@ -1123,7 +1295,7 @@ export default function Home() {
             {/* 🔹 唯一物流列表（唯一物流模块） */}
             <div className="flex-1 overflow-y-auto scrollbar-thin space-y-2">
               {/* 🔹 智能推荐提示 */}
-              {!input.designatedProvider && shippingChannels.available.length > 0 && (
+              {!input.designatedProviders && shippingChannels.available.length > 0 && (
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-2 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="text-blue-600">💡</span>
@@ -1154,6 +1326,8 @@ export default function Home() {
                     isSelected={isSelected}
                     onClick={() => handleSelectChannel(channel)}
                     input={input}
+                    isFavorite={favoriteChannels.includes(channel.id)}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 );
               })}

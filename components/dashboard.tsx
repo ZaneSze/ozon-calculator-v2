@@ -55,6 +55,11 @@ import {
 interface DashboardProps {
   result: CalculationResult;
   input: CalculationInput;
+  // 🔹 竞品价格对比
+  rivalPrice?: number;
+  rivalCurrency?: 'RMB' | 'RUB';
+  // 🔹 利润预警阈值 (null = 关闭)
+  profitWarningThreshold?: number | null;
   shippingChannels: {
     available: ShippingChannel[];
     unavailable: (ShippingChannel & { reason: string })[];
@@ -98,6 +103,9 @@ const COST_COLORS = ["#6366F1", "#F59E0B", "#8B5CF6", "#EF4444", "#10B981", "#EC
 export function Dashboard({
   result,
   input,
+  rivalPrice,
+  rivalCurrency = 'RMB',
+  profitWarningThreshold,
   shippingChannels,
   allShippingChannels,
   selectedChannel,
@@ -447,6 +455,16 @@ export function Dashboard({
           </div>
         </CardHeader>
         <CardContent>
+          {/* 🔹 利润预警提示 */}
+          {profitWarningThreshold !== undefined && profitWarningThreshold !== null && result.profitMargin < profitWarningThreshold && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-300 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+              <div className="text-sm text-amber-800">
+                利润率 <span className="font-bold">{result.profitMargin.toFixed(1)}%</span> 低于预警阈值 <span className="font-bold">{profitWarningThreshold}%</span>
+              </div>
+            </div>
+          )}
+
           {/* 核心 KPI */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="text-center p-4 rounded-xl bg-gradient-to-br from-muted/40 to-muted/10 border">
@@ -512,6 +530,44 @@ export function Dashboard({
               </div>
             </div>
           </div>
+
+          {/* 🔹 竞品价格对比 */}
+          {rivalPrice && rivalPrice > 0 && input.targetPriceRMB > 0 ? (
+            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-muted/40 to-muted/10 border">
+              <div className="text-xs text-muted-foreground mb-1">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help">vs 竞品售价</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={8} className="max-w-xs z-[9999] bg-white border border-slate-200 shadow-lg p-3">
+                      <div className="space-y-1">
+                        <p className="font-medium text-sm">与竞品价格对比</p>
+                        <p className="text-xs text-slate-600">
+                          与竞品售价的差额，正数表示高于竞品
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              {(() => {
+                const rivalInRMB = rivalCurrency === 'RUB' ? rivalPrice / input.exchangeRate : rivalPrice;
+                const isHigher = input.targetPriceRMB >= rivalInRMB;
+                const diff = input.targetPriceRMB - rivalInRMB;
+                return (
+                  <>
+                    <div className={`text-2xl font-bold ${isHigher ? "text-green-600" : "text-red-600"}`}>
+                      {isHigher ? "+" : ""}¥{diff.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      vs {rivalCurrency === 'RUB' ? `₽${rivalPrice.toFixed(0)}` : `¥${rivalPrice.toFixed(2)}`}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          ) : null}
 
           {/* 成本结构环形图 - 外围百分比常显 */}
           <div className="h-64 flex items-center">

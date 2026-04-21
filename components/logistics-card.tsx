@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { Star } from "lucide-react";
 import { ShippingChannel, CalculationInput } from "@/lib/types";
 import { CalculationTrace } from "./mapping-debug-panel";
 
@@ -18,6 +19,9 @@ interface LogisticsCardProps {
   isSelected: boolean;
   onClick: () => void;
   input: CalculationInput;
+  // 🔹 收藏夹功能
+  isFavorite?: boolean;
+  onToggleFavorite?: (channelId: string) => void;
 }
 
 // 格式化函数
@@ -31,8 +35,16 @@ const fPrice = (v: number | undefined | null): string => {
   return Math.round(v).toLocaleString();
 };
 
-export function LogisticsCard({ channel, cost, billing, isSelected, onClick, input }: LogisticsCardProps) {
+export function LogisticsCard({ channel, cost, billing, isSelected, onClick, input, isFavorite = false, onToggleFavorite }: LogisticsCardProps) {
   const [expanded, setExpanded] = useState(false);
+  
+  // 🔹 收藏切换回调
+  const handleToggleFavorite = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onToggleFavorite) {
+      onToggleFavorite(channel.id);
+    }
+  }, [channel.id, onToggleFavorite]);
   
   // 🔴 核心逻辑：直接使用计算引擎的结果，不做本地判定
   const isVolMetric = billing?.isVolumetric ?? false;
@@ -101,6 +113,16 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             </div>
           )}
         </div>
+        {/* 🔹 收藏按钮 */}
+        {onToggleFavorite && (
+          <button
+            onClick={handleToggleFavorite}
+            className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-secondary transition-colors"
+            title={isFavorite ? "取消收藏" : "添加到收藏夹"}
+          >
+            <Star className={`h-4 w-4 ${isFavorite ? "fill-yellow-400 text-yellow-500" : "text-muted-foreground"}`} />
+          </button>
+        )}
         <div className="text-xs text-muted-foreground font-medium">
           评分组: {channel.serviceTier || '-'}
         </div>

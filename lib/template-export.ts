@@ -120,6 +120,41 @@ export function downloadShippingTemplate(): void {
 }
 
 /**
+ * 生成并下载批量计算模板
+ */
+export function downloadBatchTemplate(): void {
+  const headers = [
+    "SKU编号",
+    "一级类目",
+    "二级类目",
+    "长度(cm)",
+    "宽度(cm)",
+    "高度(cm)",
+    "重量(g)",
+    "采购成本(RMB)",
+    "头程(RMB)",
+    "包装(RMB)",
+    "是否带电",
+    "是否带液体",
+    "目标售价(RMB)",
+    "备注",
+  ];
+
+  const exampleData = [
+    ["SKU001", "电子产品", "手机配件", "10", "8", "5", "150", "25", "3", "2", "否", "否", "125", ""],
+    ["SKU002", "电子产品", "充电器", "5", "5", "3", "80", "10", "1", "1", "否", "否", "50", ""],
+    ["SKU003", "家居", "收纳盒", "20", "15", "10", "200", "15", "2", "1", "否", "否", "80", ""],
+  ];
+
+  const csvContent = [
+    headers.join(","),
+    ...exampleData.map(row => row.join(",")),
+  ].join("\n");
+
+  downloadCSV(csvContent, "ozon_batch_template.csv");
+}
+
+/**
  * 下载CSV文件的通用函数
  * 添加 UTF-8 BOM 以支持 Excel 正确显示中文
  */

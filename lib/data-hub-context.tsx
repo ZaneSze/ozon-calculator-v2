@@ -976,14 +976,17 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
         const reasons: string[] = [];
         const interceptionReasons: ShippingInterceptionReason[] = [];
         
-        // 🔹 预过滤：指定物流商
-        if (designatedProvider && channel.thirdParty !== designatedProvider) {
-          unavailable.push({ 
-            ...channel, 
-            reason: `指定物流商过滤: 仅显示 ${designatedProvider}`,
-            interceptionReasons: [] 
-          });
-          return;
+        // 🔹 预过滤：指定物流商（支持逗号分隔的多个物流商）
+        if (designatedProvider) {
+          const providerList = designatedProvider.split(",").map(p => p.trim()).filter(Boolean);
+          if (providerList.length > 0 && !providerList.includes(channel.thirdParty)) {
+            unavailable.push({ 
+              ...channel, 
+              reason: `指定物流商: ${providerList.join(", ")}`,
+              interceptionReasons: [] 
+            });
+            return;
+          }
         }
         
         // ========== 六维绝对拦截引擎（读取 interceptionConfig 判断是否启用） ==========

@@ -48,6 +48,9 @@ interface BillingInfo {
 interface InputPanelProps {
   input: CalculationInput;
   onInputChange: (input: CalculationInput) => void;
+  // 🔹 竞品价格（用于对比显示）- 简化为单个值
+  rivalPrice?: number;
+  rivalCurrency?: 'RMB' | 'RUB';
   // 逆向推价所需的额外参数
   currentProfitMargin?: number; // 当前实际利润率 (%)
   onReversePriceFromMargin?: (targetMargin: number) => void; // 逆向推价回调
@@ -74,7 +77,7 @@ interface InputPanelProps {
   onToggleMarginLock?: () => void;
 }
 
-export function InputPanel({ input, onInputChange, currentProfitMargin, onReversePriceFromMargin, marginError, onReset, adRiskControl, shippingData = [], selectedBillingInfo, lockedMargin = null, onToggleMarginLock }: InputPanelProps) {
+export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = 'RMB', currentProfitMargin, onReversePriceFromMargin, marginError, onReset, adRiskControl, shippingData = [], selectedBillingInfo, lockedMargin = null, onToggleMarginLock }: InputPanelProps) {
   const { getCategories } = useDataHub();
   const categories = useMemo(() => getCategories(), [getCategories]);
   
@@ -696,6 +699,91 @@ export function InputPanel({ input, onInputChange, currentProfitMargin, onRevers
                 </div>
               )}
             </div>
+          </div>
+          {/* 🔹 竞品价格对比 - 简化版 */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">竞品售价</Label>
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={rivalPrice || ""}
+                onChange={(e) => updateField("rivalPrice", parseFloat(e.target.value) || 0)}
+                className="h-9 text-sm flex-1"
+                placeholder="输入竞品售价"
+              />
+              <div className="flex rounded-lg overflow-hidden border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // 切换到 RMB
+                    if (rivalCurrency !== 'RMB') {
+                      const val = rivalPrice || 0;
+                      if (rivalCurrency === 'RUB' && val > 0) {
+                        // RUB 转 RMB
+                        updateField("rivalPrice", val / input.exchangeRate);
+                      }
+                      updateField("rivalCurrency", 'RMB');
+                    }
+                  }}
+                  className={`px-2 py-1 text-xs font-medium transition-colors ${
+                    rivalCurrency === 'RMB' ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  ¥
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // 切换到 RUB
+                    if (rivalCurrency !== 'RUB') {
+                      const val = rivalPrice || 0;
+                      if (rivalCurrency === 'RMB' && val > 0) {
+                        // RMB 转 RUB
+                        updateField("rivalPrice", val * input.exchangeRate);
+                      }
+                      updateField("rivalCurrency", 'RUB');
+                    }
+                  }}
+                  className={`px-2 py-1 text-xs font-medium transition-colors ${
+                    rivalCurrency === 'RUB' ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  ₽
+                </button>
+              </div>
+            </div>
+            {/* 对比结果 */}
+            {rivalPrice && rivalPrice > 0 && input.targetPriceRMB > 0 && (() => {
+              const rivalInRMB = rivalCurrency === 'RUB' ? rivalPrice / input.exchangeRate : rivalPrice;
+              const diff = input.targetPriceRMB - rivalInRMB;
+              const isHigher = diff >= 0;
+              return (
+                <div className={`text-xs p-2 rounded-md font-medium ${isHigher ? "text-green-700 bg-green-50" : "text-red-700 bg-red-50"}`}>
+                  {isHigher ? "高于竞品" : "低于竞品"} ¥{Math.abs(diff).toFixed(2)}
+                </div>
+              );
+            })()}
+          </div>
+          {/* 🔹 利润预警阈值 */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">利润率预警阈值 (%)</Label>
+            <Input
+              type="number"
+              min="0"
+              max="99"
+              step="1"
+              value={input.profitWarningThreshold !== null && input.profitWarningThreshold !== undefined ? input.profitWarningThreshold : ""}
+              onChange={(e) => updateField("profitWarningThreshold", e.target.value === "" ? null : parseFloat(e.target.value) || null)}
+              className="h-9 text-sm"
+              placeholder="留空关闭预警"
+            />
+            {input.profitWarningThreshold !== null && input.profitWarningThreshold !== undefined && currentProfitMargin !== undefined && (
+              <div className={`text-xs p-2 rounded-md font-medium ${currentProfitMargin >= input.profitWarningThreshold ? "text-green-700 bg-green-50 border border-green-200" : "text-amber-700 bg-amber-50 border border-amber-200"}`}>
+                当前 {currentProfitMargin.toFixed(1)}% {currentProfitMargin >= input.profitWarningThreshold ? "✓ 达标" : "⚠️ 低于阈值"}
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">预留大促折扣</Label>

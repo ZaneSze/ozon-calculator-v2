@@ -452,9 +452,33 @@ export function Header({
     
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <Calculator className="h-5 w-5 text-primary" />
-          <h1 className="text-lg font-bold">Ozon rFBS 跨境精算系统</h1>
+        <div className="flex items-center gap-3">
+          {/* Logo图标区域 */}
+          <div className="relative flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 shadow-md">
+            <svg 
+              viewBox="0 0 24 24" 
+              className="w-5 h-5 text-white"
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            >
+              <path d="M12 2v20M2 12h20" strokeOpacity="0.3" />
+              <path d="M7 7h.01M7 12h.01M7 17h.01M12 7h.01M12 12h.01M12 17h.01M17 7h.01M17 12h.01M17 17h.01" />
+            </svg>
+            {/* 装饰角标 */}
+            <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-white/30 rounded-full" />
+          </div>
+          
+          {/* 系统名称区域 */}
+          <div className="flex flex-col">
+            <h1 className="text-lg font-bold leading-tight tracking-tight">
+              <span className="text-orange-600">Ozon</span>
+              <span className="text-slate-800"> rFBS</span>
+            </h1>
+            <span className="text-[10px] text-muted-foreground/70 tracking-wide">跨境精算系统</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-4">
