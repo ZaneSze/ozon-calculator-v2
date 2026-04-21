@@ -919,8 +919,14 @@ export default function Home() {
           return null;
         })()}
         
-        {/* 🔹 渠道价格限制 - 改为更直观的名称和详细说明 */}
+        {/* 🔹 渠道价格限制 - 仅当没有可用渠道时才显示警告 */}
         {(() => {
+          // 只有当没有任何可用渠道时，才显示价格限制警告
+          const hasAvailableChannels = shippingChannels.available.length > 0;
+          
+          // 如果有可用渠道，不显示价格拦截警告
+          if (hasAvailableChannels) return null;
+          
           // 提取价格限制的渠道，获取其数值范围
           const valueBlockedChannel = shippingChannels.unavailable.find(ch => ch.reason?.includes('货值') || ch.reason?.includes('价'));
           const maxValueRUB = valueBlockedChannel?.maxValueRUB;
