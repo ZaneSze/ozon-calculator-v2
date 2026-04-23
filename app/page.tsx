@@ -258,6 +258,9 @@ export default function Home() {
   // 🔹 利润率锁定状态：null=未锁定, 数字=锁定的利润率值(%)
   const [lockedMargin, setLockedMargin] = useState<number | null>(null);
   
+  // 🔹 致命错误诊断面板显
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
+  
   // 🔹 渠道收藏夹
   const [favoriteChannels, setFavoriteChannels] = useState<string[]>([]);
   
@@ -1013,10 +1016,151 @@ export default function Home() {
       >
         {/* 🔴 致命错误 - 无可用渠道（唯一）- 强烈警报 */}
         {shippingChannels.available.length === 0 && shippingData.length > 0 && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 px-5 py-2 rounded-full text-base font-extrabold bg-red-600 text-white border-4 border-red-800 shadow-2xl animate-critical-flash">
+          <div className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-extrabold bg-red-600 text-white border-4 border-red-800 shadow-2xl animate-critical-flash">
             <AlertCircle className="h-5 w-5" />
             <span>🚨 致命：商品尺寸/重量/属性无法匹配任何物流渠道</span>
-          </span>
+            <button 
+              type="button"
+              onClick={() => setShowDiagnostic(!showDiagnostic)}
+              className="ml-1 px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded text-xs font-bold"
+            >
+              {showDiagnostic ? '隐藏' : '[检查]'}
+            </button>
+            {showDiagnostic && (
+              <>
+                <div 
+                  className="fixed inset-0 z-[99998] bg-black/30" 
+                  onClick={() => setShowDiagnostic(false)}
+                />
+                <div 
+                  className="fixed z-[99999] p-4 bg-white text-slate-700 rounded-lg shadow-2xl border-2 border-red-200 text-xs whitespace-nowrap min-w-[320px] max-h-[450px] overflow-y-auto"
+                  style={{ left: '50%', top: '100px', transform: 'translateX(-50%)' }}
+                >
+                <div className="font-bold text-red-600 mb-2">🔍 问题诊断与解决方案</div>
+                
+                {/* 检查输入是否完整 */}
+                <div className="mb-3 bg-slate-50 p-2 rounded">
+                  <div className="font-medium text-slate-700 mb-2">📝 输入检查：</div>
+                  
+                  {/* 尺寸 */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={input.length > 0 && input.width > 0 && input.height > 0 ? "text-green-600" : "text-red-600"}>
+                      {input.length > 0 && input.width > 0 && input.height > 0 ? "✓" : "✗"} 尺寸
+                    </span>
+                    {input.length > 0 && input.width > 0 && input.height > 0 && (
+                      <span className="text-slate-500 text-[10px]">{input.length}×{input.width}×{input.height}cm</span>
+                    )}
+                  </div>
+                  
+                  {/* 重量 */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={input.weight > 0 ? "text-green-600" : "text-red-600"}>
+                      {input.weight > 0 ? "✓" : "✗"} 重量
+                    </span>
+                    {input.weight > 0 && (
+                      <span className="text-slate-500 text-[10px]">{input.weight}g</span>
+                    )}
+                  </div>
+                  
+                  {/* 售价 */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={input.targetPriceRMB > 0 ? "text-green-600" : "text-orange-600"}>
+                      {input.targetPriceRMB > 0 ? "✓" : "?-"} 售价
+                    </span>
+                    {input.targetPriceRMB > 0 && (
+                      <span className="text-slate-500 text-[10px]">¥{input.targetPriceRMB}</span>
+                    )}
+                  </div>
+                  
+                  {/* 属性 */}
+                  <div className="flex items-center gap-2">
+                    <span className={input.hasBattery || input.hasLiquid ? "text-orange-600" : "text-green-600"}>
+                      {input.hasBattery || input.hasLiquid ? "⚠" : "✓"} 属性
+                    </span>
+                    <span className="text-slate-500 text-[10px]">
+                      {input.hasBattery && "带电"}{input.hasBattery && input.hasLiquid && "/"}{input.hasLiquid && "带液"}
+                      {!input.hasBattery && !input.hasLiquid && "普通"}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* 分析结果和建议 */}
+                <div className="mb-3">
+                  <div className="font-medium text-slate-700 mb-1">💡 建议：</div>
+                  
+                  {/* 如果缺少尺寸或重量 */}
+                  {((input.length <= 0 || input.width <= 0 || input.height <= 0) || input.weight <= 0) && (
+                    <div className="text-orange-600 ml-2 mb-2">
+                      • 请填写完整的尺寸和重量信息
+                    </div>
+                  )}
+                  
+                  {/* 如果填写了尺寸重量��没有售价 - 显示价格建议 */}
+                  {input.length > 0 && input.width > 0 && input.height > 0 && input.weight > 0 && input.targetPriceRMB <= 0 && shippingChannels.unavailable.length > 0 && (
+                    <div className="bg-amber-50 p-2 rounded mb-2">
+                      <div className="text-amber-700 font-medium mb-1">💰 填写售价可获得物流匹配</div>
+                      {(() => {
+                        // 找出价格限制
+                        const valueBlocked = shippingChannels.unavailable.find(ch => ch.minValueRUB || ch.maxValueRUB);
+                        if (valueBlocked) {
+                          const minRUB = valueBlocked.minValueRUB || 0;
+                          const maxRUB = valueBlocked.maxValueRUB || 0;
+                          const minRMB = minRUB / input.exchangeRate;
+                          const maxRMB = maxRUB ? maxRUB / input.exchangeRate : null;
+                          return (
+                            <div className="text-slate-600 text-[10px] space-y-1">
+                              <div>建议售价区间：</div>
+                              {minRMB > 0 && <div>¥{Math.round(minRMB)} ~ </div>}
+                              {maxRMB ? (
+                                <div>¥{Math.round(maxRMB)} (约{Math.round(maxRUB).toLocaleString()}₽)</div>
+                              ) : minRMB > 0 ? (
+                                <div>¥{Math.round(minRMB)}以上</div>
+                              ) : null}
+                              <div className="text-[9px] text-slate-400">
+                                (渠道: {valueBlocked.name})
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  )}
+                  
+                  {/* 如果尺寸重量售价都填了但还是没有渠道 - 显示具体原因 */}
+                  {input.length > 0 && input.width > 0 && input.height > 0 && input.weight > 0 && input.targetPriceRMB > 0 && shippingChannels.unavailable.length > 0 && (
+                    <div className="bg-red-50 p-2 rounded">
+                      <div className="text-red-700 font-medium mb-1">⚠️ 被拦截原因：</div>
+                      {shippingChannels.unavailable.slice(0, 2).map((ch, idx) => (
+                        <div key={idx} className="text-slate-600 text-[10px] mb-1">
+                          {ch.name}: {ch.reason || "不符合渠道要求"}
+                        </div>
+                      ))}
+                      {shippingChannels.unavailable.length > 2 && (
+                        <div className="text-slate-400 text-[9px]">
+                          ...还有 {shippingChannels.unavailable.length - 2} 个渠道
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* 如果是属性问题 */}
+                  {(input.hasBattery || input.hasLiquid) && (
+                    <div className="text-orange-600 ml-2 mb-2">
+                      • 您的商品带有特殊属性（带电/带液），请确保选择支持该属性的物流渠道
+                    </div>
+                  )}
+                </div>
+                
+                {/* 通用建议 */}
+                <div className="mt-2 pt-2 border-t border-slate-200 text-slate-500 text-[10px]">
+                  <div>• 尝试调整参数后重新计算</div>
+                  <div>• 或更换其他物流渠道</div>
+                </div>
+              </div>
+              </>
+            )}
+          </div>
         )}
         
         {/* 🔴 阻断错误 - 亏损（唯一）- 强烈红色闪烁 */}
