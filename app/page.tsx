@@ -1004,7 +1004,7 @@ export default function Home() {
       {/* 🔹 全局诊断通栏 - 横跨全屏，自适应滚动，去重渲染 */}
       <div 
         id="global-diagnostic-bar"
-        className="w-full flex flex-wrap justify-center items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-50 via-amber-50 to-slate-50 border-b border-amber-200"
+        className="relative z-[60] w-full flex flex-wrap justify-center items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-50 via-amber-50 to-slate-50 border-b border-amber-200"
         style={{ 
           minHeight: '40px',
           maxHeight: '100px',
@@ -1066,11 +1066,11 @@ export default function Home() {
             <span className="flex-shrink-0 inline-flex items-center gap-1 px-4 py-2 rounded-full text-base font-bold bg-red-500 text-white border-3 border-red-600 shadow-lg animate-urgent-pulse">
               <span>❌</span>
               <span>{isPriceTooHigh && !isPriceTooLow ? '价格过高' : isPriceTooLow && !isPriceTooHigh ? '价格过低' : '价格不符'}</span>
-              <details className="inline ml-1 group">
+              <details className="inline ml-1 group relative">
                 <summary className="cursor-help list-none inline text-xs opacity-75 hover:opacity-100">
                   ⓘ
                 </summary>
-                <div className="hidden group-open:block absolute z-50 mt-2 p-3 bg-white text-slate-700 rounded-lg shadow-xl border-2 border-red-200 text-xs whitespace-nowrap min-w-[200px]">
+                <div className="hidden group-open:block fixed left-1/2 -translate-x-1/2 top-full z-[99999] mt-2 p-3 bg-white text-slate-700 rounded-lg shadow-xl border-2 border-red-200 text-xs whitespace-nowrap min-w-[200px]">
                   <div className="font-bold text-red-600 mb-1">📦 渠道价格限制说明</div>
                   <div className="text-slate-600 text-[11px]">
                     该物流渠道对商品售价有限制，您的售价超出了允许范围。
