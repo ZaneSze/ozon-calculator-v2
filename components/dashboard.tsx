@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
 import {
   AlertTriangle,
   Lightbulb,
@@ -40,6 +40,7 @@ import { getCommissionRate, getCommissionTiersForMode, calculateMarginalContribu
 import { cnyToRub, getRiskAdjustedRevenueRMB, getRiskAdjustedRubPerCny, rubToCny } from "@/lib/currency";
 import { calculateOzonBackendPricing } from "@/lib/ozon-pricing";
 import { isProfitMarginBelowThreshold } from "@/lib/profit-threshold";
+import { WeightWithKg } from "@/components/weight-with-kg";
 import {
   PieChart,
   Pie,
@@ -196,6 +197,7 @@ export function Dashboard({
       result.costs.commission -
       result.costs.withdrawalFee -
       result.costs.paymentFee -
+      (result.costs.starPlanFee || 0) -
       result.costs.cpaCost -
       (cpcSalesPercent > 0 ? result.costs.cpcCost : 0);
 
@@ -226,7 +228,8 @@ export function Dashboard({
       commissionRate,
       input.withdrawalFee,
       exchangeScenarioBase.cpaRateForM,
-      input.paymentFee
+      input.paymentFee,
+      input.starPlanEnabled ? input.starPlanRate || 1.5 : 0
     );
     const marginAfterSalesCpc = baseM - Math.max(0, exchangeScenarioBase.cpcSalesPercent || 0) / 100;
     const profit =
@@ -241,6 +244,8 @@ export function Dashboard({
     exchangeScenarioBase,
     input.fulfillmentMode,
     input.paymentFee,
+    input.starPlanEnabled,
+    input.starPlanRate,
     input.withdrawalFee,
     result.commissionRate,
     result.netProfit,
@@ -270,6 +275,7 @@ export function Dashboard({
       { name: "平台佣金", value: result.costs.commission },
       { name: "提现手续费", value: result.costs.withdrawalFee },
       { name: "支付手续费", value: result.costs.paymentFee },
+      { name: "星星计划", value: result.costs.starPlanFee || 0 },
       { name: "广告支出", value: result.costs.cpaCost + result.costs.cpcCost },
       { name: "退货损耗", value: result.costs.returnCost },
       ...(result.taxes?.enabled
@@ -401,8 +407,8 @@ export function Dashboard({
   const advisorActions = useMemo(() => {
     const actions: Array<{
       title: string;
-      reason: string;
-      impact: string;
+      reason: ReactNode;
+      impact: ReactNode;
       tone: "red" | "amber" | "green" | "blue";
     }> = [];
 
@@ -428,8 +434,21 @@ export function Dashboard({
     } else if (result.isVolumetric) {
       actions.push({
         title: "优化包装尺寸",
-        reason: `计费重 ${result.chargeableWeight.toFixed(0)}g 高于实重 ${input.weight.toFixed(0)}g`,
-        impact: `抛重约 ${result.volumetricWeight.toFixed(0)}g，优先压缩长宽高`,
+        reason: (
+          <span className="inline-flex flex-wrap items-center gap-1">
+            <span>计费重</span>
+            <WeightWithKg weightG={result.chargeableWeight} kgClassName="text-amber-700/75" />
+            <span>高于实重</span>
+            <WeightWithKg weightG={input.weight} />
+          </span>
+        ),
+        impact: (
+          <span className="inline-flex flex-wrap items-center gap-1">
+            <span>抛重约</span>
+            <WeightWithKg weightG={result.volumetricWeight} kgClassName="text-amber-700/75" />
+            <span>，优先压缩长宽高</span>
+          </span>
+        ),
         tone: "amber",
       });
     }
@@ -544,6 +563,7 @@ export function Dashboard({
       { label: "物流费用", value: result.costs.internationalShipping, color: "#F59E0B" },
       { label: "平台佣金", value: result.costs.commission, color: "#10B981" },
       { label: "支付手续费", value: result.costs.paymentFee, color: "#8B5CF6" },
+      { label: "星星计划", value: result.costs.starPlanFee || 0, color: "#EC4899" },
       { label: "提现手续费", value: result.costs.withdrawalFee, color: "#06B6D4" },
       { label: "退损预估", value: result.costs.returnCost, color: "#F97316" },
       { label: "广告费用", value: result.costs.cpaCost + result.costs.cpcCost, color: "#3B82F6" },

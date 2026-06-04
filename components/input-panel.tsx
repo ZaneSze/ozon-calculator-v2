@@ -22,6 +22,7 @@ import { useDataHub } from "@/lib/data-hub-context";
 import { CalculationInput, ShippingChannel } from "@/lib/types";
 import { calculateOzonBackendPricing } from "@/lib/ozon-pricing";
 import { isProfitMarginBelowThreshold } from "@/lib/profit-threshold";
+import { WeightWithKg } from "@/components/weight-with-kg";
 import { calculateOriginalPrice, normalizePromotionDiscount } from "@/lib/calculator";
 
 /**
@@ -153,7 +154,7 @@ function Section({
 }: {
   id: string;
   title: string;
-  summary: string;
+  summary: ReactNode;
   icon: ReactNode;
   defaultOpen?: boolean;
   openSections: Record<string, boolean>;
@@ -355,6 +356,7 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
   );
   const cpcBillingMode = input.cpcBillingMode || "bidCvr";
   const cpcSalesCostRMB = input.targetPriceRMB > 0 ? input.targetPriceRMB * ((input.cpcSalesPercent || 0) / 100) : 0;
+  const starPlanCostRMB = input.starPlanEnabled && input.targetPriceRMB > 0 ? input.targetPriceRMB * ((input.starPlanRate ?? 1.5) / 100) : 0;
   const cpcBidCostRUB = input.cpcConversionRate > 0 ? input.cpcBid / (input.cpcConversionRate / 100) : 0;
   const cpcBidCostRMB = input.exchangeRate > 0 ? cpcBidCostRUB / input.exchangeRate : 0;
 
@@ -365,7 +367,12 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
       <Section
         id="product"
         title="商品属性"
-        summary={`${input.length}×${input.width}×${input.height}cm / ${input.weight}g`}
+        summary={(
+          <span className="inline-flex min-w-0 items-center gap-1">
+            <span className="truncate">{input.length}×{input.width}×{input.height}cm /</span>
+            <WeightWithKg weightG={input.weight} />
+          </span>
+        )}
         icon={<Package className="h-4 w-4" />}
         openSections={openSections}
         setOpenSections={setOpenSections}
@@ -528,6 +535,9 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
               onChange={(e) => updateField("weight", parseFloat(e.target.value) || 0)}
               className="h-8 text-sm"
             />
+            <div className="text-[10px] text-slate-400">
+              当前重量：<WeightWithKg weightG={input.weight} />
+            </div>
             {/* 🔹 计抛预警：仅在 isVolumetric && billingWeight > actualWeight 时显示 - 强烈橙色 */}
             {volWarningActive && selectedBillingInfo && (
               <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2">
@@ -536,26 +546,48 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
                   <div className="text-xs font-bold text-amber-800">
                     ⚠️ 计抛预警
                   </div>
-                  <div className="text-xs text-amber-700 mt-1">
-                    <div>抛重 <span className="font-bold bg-amber-200 px-1.5 rounded">{selectedBillingInfo.volumetricWeight.toFixed(0)}g</span> &gt; 实重 <span className="font-bold bg-amber-200 px-1.5 rounded">{selectedBillingInfo.actualWeight.toFixed(0)}g</span></div>
-                    <div className="mt-1">计费重: <span className="font-bold">{selectedBillingInfo.billingWeight.toFixed(0)}g</span></div>
+                  <div className="mt-1 text-xs text-amber-700">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span>抛重</span>
+                      <span className="rounded bg-amber-200 px-1.5 font-bold">
+                        <WeightWithKg weightG={selectedBillingInfo.volumetricWeight} kgClassName="text-amber-700/75" />
+                      </span>
+                      <span>&gt; 实重</span>
+                      <span className="rounded bg-amber-200 px-1.5 font-bold">
+                        <WeightWithKg weightG={selectedBillingInfo.actualWeight} kgClassName="text-amber-700/75" />
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <span>计费重:</span>
+                      <span className="font-bold">
+                        <WeightWithKg weightG={selectedBillingInfo.billingWeight} kgClassName="text-amber-700/75" />
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-amber-600 mt-1.5 font-mono bg-amber-50 p-1 rounded">
-                    {input.length}×{input.width}×{input.height} / {divisor} × 1000 = {selectedBillingInfo.volumetricWeight.toFixed(0)}g
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1 rounded bg-amber-50 p-1 text-[10px] text-amber-600">
+                    <span className="font-mono">{input.length}×{input.width}×{input.height} / {divisor} × 1000 =</span>
+                    <WeightWithKg weightG={selectedBillingInfo.volumetricWeight} kgClassName="text-amber-700/75" />
                   </div>
                 </div>
               </div>
             )}
             {/* 非泡货时的静默提示 - 仅当有选中渠道且重量>0时显示 */}
             {!volWarningActive && input.weight > 0 && selectedBillingInfo && (
-              <div className="text-[10px] text-slate-400">
-                抛重 <span className="font-medium">{selectedBillingInfo.volumetricWeight.toFixed(0)}g</span> ≤ 实重 <span className="font-medium">{selectedBillingInfo.actualWeight.toFixed(0)}g</span>，按实重计费
+              <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
+                <span>抛重</span>
+                <WeightWithKg weightG={selectedBillingInfo.volumetricWeight} />
+                <span>≤ 实重</span>
+                <WeightWithKg weightG={selectedBillingInfo.actualWeight} />
+                <span>，按实重计费</span>
               </div>
             )}
             {/* 未选中渠道时的默认提示 */}
             {!selectedBillingInfo && input.weight > 0 && (
-              <div className="text-[10px] text-slate-400">
-                抛重 <span className="font-medium">{(input.length * input.width * input.height / 12000 * 1000).toFixed(0)}g</span> ≤ 实重 <span className="font-medium">{input.weight}g</span>
+              <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
+                <span>抛重</span>
+                <WeightWithKg weightG={input.length * input.width * input.height / 12000 * 1000} />
+                <span>≤ 实重</span>
+                <WeightWithKg weightG={input.weight} />
               </div>
             )}
           </div>
@@ -690,7 +722,7 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
       <Section
         id="ads"
         title="广告推广"
-        summary={`CPA${input.cpaEnabled ? "开" : "关"} / CPC${input.cpcEnabled ? "开" : "关"}`}
+        summary={`CPA${input.cpaEnabled ? "开" : "关"} / CPC${input.cpcEnabled ? "开" : "关"} / 星星${input.starPlanEnabled ? "开" : "关"}`}
         icon={<Megaphone className="h-4 w-4" />}
         openSections={openSections}
         setOpenSections={setOpenSections}
@@ -862,9 +894,53 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
               )}
             </div>
           </div>
+
+          {/* 星星计划 */}
+          <div className="space-y-2 rounded-lg border border-fuchsia-100 bg-fuchsia-50/40 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <Label className="text-xs font-medium">星星计划</Label>
+                <div className="mt-0.5 text-[10px] leading-snug text-slate-500">
+                  支持信用卡分期或积分购买，平台按销售额扣点
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => updateField("starPlanEnabled", !input.starPlanEnabled)}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-fuchsia-300 focus:ring-offset-1 ${
+                  input.starPlanEnabled
+                    ? "bg-fuchsia-600 text-white shadow-sm"
+                    : "bg-slate-200 text-slate-500"
+                }`}
+                aria-label={input.starPlanEnabled ? "关闭星星计划" : "开启星星计划"}
+              >
+                {input.starPlanEnabled ? "ON" : "OFF"}
+              </button>
+            </div>
+            <div className={`transition-opacity ${input.starPlanEnabled ? "opacity-100" : "opacity-45 pointer-events-none"}`}>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={numberInputValue(input.starPlanRate ?? 1.5)}
+                  onChange={(e) => updateField("starPlanRate", parseFloat(e.target.value) || 0)}
+                  className="h-8 text-sm"
+                  disabled={!input.starPlanEnabled}
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+                {input.starPlanEnabled && (input.starPlanRate ?? 0) > 0 && (
+                  <span className="rounded bg-white/75 px-1.5 py-0.5 text-xs text-fuchsia-700">
+                    扣费: ¥{starPlanCostRMB.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
           
           {/* 广告风控面板 */}
-          {adRiskControl && (input.cpaEnabled || input.cpcEnabled) && (
+          {adRiskControl && (input.cpaEnabled || input.cpcEnabled || input.starPlanEnabled) && (
             <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
               {/* 保本 ACOS 显示 */}
               <div className="flex items-center justify-between text-xs">

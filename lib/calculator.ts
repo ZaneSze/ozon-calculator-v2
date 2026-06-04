@@ -24,6 +24,7 @@
 import { CalculationInput, CalculationResult, CategoryCommission, CommissionTier, FulfillmentMode, ShippingChannel, UnavailableShippingChannel } from "./types";
 import { calculateShippingCost, parseBillingWeight } from "./data-hub-context";
 import { cnyToRub, rubToCny } from "./currency";
+import { formatWeightWithKg } from "./weight-format";
 
 function parseFiniteNumber(value: number, fallback: number): number {
   const parsed = parseFloat(String(value));
@@ -263,6 +264,15 @@ function calculateInputCpcCost(input: CalculationInput, priceRMB: number = input
   );
 }
 
+export function calculateStarPlanFee(starPlanEnabled: boolean, starPlanRate: number, priceRMB: number): number {
+  if (!starPlanEnabled) return 0;
+  return normalizeMoney(priceRMB) * (normalizePercent(starPlanRate) / 100);
+}
+
+function getInputStarPlanRate(input: CalculationInput): number {
+  return input.starPlanEnabled ? normalizePercent(input.starPlanRate ?? 1.5) : 0;
+}
+
 /**
  * 计算 CPA 广告费 (RMB)
  * A_cpa = P_rmb × CPA占比
@@ -285,13 +295,15 @@ export function calculateMarginalContribution(
   commissionRate: number,
   withdrawalFee: number,
   cpaRate: number,
-  paymentFee: number = 0
+  paymentFee: number = 0,
+  starPlanRate: number = 0
 ): number {
   const C = normalizePercent(commissionRate) / 100;
   const W = normalizePercent(withdrawalFee) / 100;
   const Acpa = normalizePercent(cpaRate) / 100;
   const Pfee = normalizePercent(paymentFee) / 100;
-  return (1 - C) * (1 - W) - Acpa - Pfee;
+  const StarFee = normalizePercent(starPlanRate) / 100;
+  return (1 - C) * (1 - W) - Acpa - Pfee - StarFee;
 }
 
 /**
@@ -353,6 +365,7 @@ export function reversePriceFromMargin(
     input.cpcEnabled && (input.cpcBillingMode || "bidCvr") === "salesPercent"
       ? normalizePercent(input.cpcSalesPercent || 0) / 100
       : 0;
+  const starPlanRate = getInputStarPlanRate(input);
   
   // 1. 计算不依赖售价的固定成本部分
   const purchaseCost = normalizeMoney(input.purchaseCost);
@@ -383,7 +396,7 @@ export function reversePriceFromMargin(
     
     // 计算边际贡献率 M
     const cpaRateForM = input.cpaEnabled ? input.cpaRate : 0;
-    const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM, input.paymentFee);
+    const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM, input.paymentFee, starPlanRate);
     
     // 熔断检测：销售额比例 CPC 会占用利润率空间，必须进入反推分母。
     const denominator = M - T_m - variableCpcRate;
@@ -391,7 +404,7 @@ export function reversePriceFromMargin(
       return {
         priceRMB: 0,
         commissionRate,
-        error: `目标利润率过高！当前佣金${commissionRate}%、广告率${cpaRateForM}%、CPC销售额占比${(variableCpcRate * 100).toFixed(1)}%、提现手续费${input.withdrawalFee}%、支付手续费${input.paymentFee || 0}%已占据过多空间，最大可实现利润率为 ${((M - variableCpcRate) * 100).toFixed(1)}%`
+        error: `目标利润率过高！当前佣金${commissionRate}%、广告率${cpaRateForM}%、CPC销售额占比${(variableCpcRate * 100).toFixed(1)}%、星星计划${starPlanRate.toFixed(1)}%、提现手续费${input.withdrawalFee}%、支付手续费${input.paymentFee || 0}%已占据过多空间，最大可实现利润率为 ${((M - variableCpcRate) * 100).toFixed(1)}%`
       };
     }
     
@@ -430,7 +443,7 @@ export function reversePriceFromMargin(
   const validation = validatePriceForTier(currentPriceRMB, input.exchangeRate, commission, input.fulfillmentMode || "RFBS");
   if (!validation.valid) {
     // 跨阶梯了，再迭代一轮
-    const M = calculateMarginalContribution(finalCommissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0, input.paymentFee);
+    const M = calculateMarginalContribution(finalCommissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0, input.paymentFee, starPlanRate);
     const denominator = M - T_m - variableCpcRate;
     if (denominator <= 0) {
       return {
@@ -530,6 +543,7 @@ export function calculateSixTierPricing(
   const withdrawalFee = parseFiniteNumber(input.withdrawalFee, 1.5);
   const paymentFee = parseFiniteNumber(input.paymentFee, 0);
   const cpaRate = input.cpaEnabled ? parseFiniteNumber(input.cpaRate, 0) : 0;
+  const starPlanRate = getInputStarPlanRate(input);
   const variableCpcRate =
     input.cpcEnabled && (input.cpcBillingMode || "bidCvr") === "salesPercent"
       ? normalizePercent(input.cpcSalesPercent || 0) / 100
@@ -558,7 +572,7 @@ export function calculateSixTierPricing(
       finalCommissionRate = commissionRate;
       
       // 3. 计算边际贡献率 M
-      const M = calculateMarginalContribution(commissionRate, withdrawalFee, cpaRate, paymentFee);
+      const M = calculateMarginalContribution(commissionRate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
       finalM = M;
       
       // 4. 检查分母：销售额比例 CPC 占用利润率空间，必须进入分母。
@@ -596,7 +610,7 @@ export function calculateSixTierPricing(
         variableCpcRate > 0 ? priceRMB * variableCpcRate : calculateInputCpcCost(input, priceRMB);
       const marginForPrice = (priceRMB: number) => {
         const rate = getCommissionRate(commission, cnyToRub(priceRMB, exchangeRate), input.fulfillmentMode || "RFBS");
-        const M = calculateMarginalContribution(rate, withdrawalFee, cpaRate, paymentFee);
+        const M = calculateMarginalContribution(rate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
         return priceRMB > 0
           ? (calculateNetProfit(priceRMB, M, fixedCost + cpcCostForPrice(priceRMB)) / priceRMB) * 100
           : -Infinity;
@@ -643,7 +657,7 @@ export function calculateSixTierPricing(
         finalPriceRMB = selectedPriceRMB;
         finalPriceRUB = parseFloat(cnyToRub(finalPriceRMB, exchangeRate).toFixed(0));
         finalCommissionRate = getCommissionRate(commission, cnyToRub(finalPriceRMB, exchangeRate), input.fulfillmentMode || "RFBS");
-        finalM = calculateMarginalContribution(finalCommissionRate, withdrawalFee, cpaRate, paymentFee);
+        finalM = calculateMarginalContribution(finalCommissionRate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
       }
     }
     
@@ -692,6 +706,7 @@ export function calculatePricingStrategies(
   totalFixedCost: number,
   paymentFee: number = 0,
   cpcSalesPercent: number = 0,
+  starPlanRate: number = 0,
   fulfillmentMode: FulfillmentMode = "RFBS"
 ): {
   breakEven: number;
@@ -721,7 +736,7 @@ export function calculatePricingStrategies(
     let validPriceRMB = Infinity;
 
     for (const tier of getCommissionTiersForMode(commission, fulfillmentMode)) {
-      const M = calculateMarginalContribution(tier.rate, safeWithdrawalFee, safeCpaRate, safePaymentFee) - (safeCpcSalesPercent / 100);
+      const M = calculateMarginalContribution(tier.rate, safeWithdrawalFee, safeCpaRate, safePaymentFee, starPlanRate) - (safeCpcSalesPercent / 100);
       const denominator = M - targetMargin;
       if (denominator <= 0) continue;
 
@@ -754,6 +769,7 @@ export function detectCommissionBlackHole(
   totalFixedCost: number,
   cpcCost: number,
   paymentFee: number = 0,
+  starPlanRate: number = 0,
   fulfillmentMode: FulfillmentMode = "RFBS"
 ): string | null {
   const safePriceRMB = normalizeMoney(priceRMB);
@@ -770,8 +786,8 @@ export function detectCommissionBlackHole(
       const lowerPriceRUB = normalizeTierMax(tier);
       if (!Number.isFinite(lowerPriceRUB)) continue;
       const lowerPriceRMB = rubToCny(lowerPriceRUB, safeExchangeRate);
-      const M_lower = calculateMarginalContribution(tier.rate, withdrawalFee, cpaRate, paymentFee);
-      const M_current = calculateMarginalContribution(currentRate, withdrawalFee, cpaRate, paymentFee);
+      const M_lower = calculateMarginalContribution(tier.rate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
+      const M_current = calculateMarginalContribution(currentRate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
 
       if (M_lower > 0 && M_current > 0) {
         const profitLower = calculateNetProfit(lowerPriceRMB, M_lower, safeTotalFixedCost);
@@ -805,6 +821,7 @@ export function calculateExchangeRateStressTest(
   totalFixedCost: number,
   paymentFee: number = 0,
   cpcSalesPercent: number = 0,
+  starPlanRate: number = 0,
   fulfillmentMode: FulfillmentMode = "RFBS"
 ): {
   at5PercentDrop: number;
@@ -825,7 +842,7 @@ export function calculateExchangeRateStressTest(
   
   // 当前佣金率
   const currentCommissionRate = getCommissionRate(commission, priceRUB, fulfillmentMode);
-  const currentM = calculateMarginalContribution(currentCommissionRate, wFee, cRate, pFee);
+  const currentM = calculateMarginalContribution(currentCommissionRate, wFee, cRate, pFee, starPlanRate);
 
   // 计算回款汇率恶化后的利润
   const calcProfitAtExchangeRate = (newExchangeRate: number) => {
@@ -838,7 +855,7 @@ export function calculateExchangeRateStressTest(
     // 获取新的佣金率
     const newCommissionRate = getCommissionRate(commission, newPriceRUB, fulfillmentMode);
     // 计算新的边际贡献率
-    const M = calculateMarginalContribution(newCommissionRate, wFee, cRate, pFee);
+    const M = calculateMarginalContribution(newCommissionRate, wFee, cRate, pFee, starPlanRate);
     
     if (M <= 0) return -Infinity;
     // 🔹 口径：exchangeRate 越高，固定卢布售价折回人民币越少
@@ -929,6 +946,7 @@ export function calculateProfitCurve(
   totalFixedCost: number,
   paymentFee: number = 0,
   cpcSalesPercent: number = 0,
+  starPlanRate: number = 0,
   fulfillmentMode: FulfillmentMode = "RFBS"
 ): { priceRMB: number; priceRUB: number; profit: number; commissionRate: number }[] {
   const safeExchangeRate = parseFiniteNumber(exchangeRate, 12) > 0 ? parseFiniteNumber(exchangeRate, 12) : 12;
@@ -941,7 +959,7 @@ export function calculateProfitCurve(
     const priceRMB = normalizeMoney(rawPriceRMB);
     const priceRUB = cnyToRub(priceRMB, safeExchangeRate);
     const rate = getCommissionRate(commission, priceRUB, fulfillmentMode);
-    const M = calculateMarginalContribution(rate, safeWithdrawalFee, safeCpaRate, safePaymentFee);
+    const M = calculateMarginalContribution(rate, safeWithdrawalFee, safeCpaRate, safePaymentFee, starPlanRate);
     const dynamicCpcCost = priceRMB * cpcRate;
     const profit = M > 0 ? calculateNetProfit(priceRMB, M, safeTotalFixedCost + dynamicCpcCost) : -(safeTotalFixedCost + dynamicCpcCost);
     return { priceRMB, priceRUB, profit, commissionRate: rate };
@@ -982,7 +1000,7 @@ export function calculateMultiItemProfit(
 
   const priceRUB = cnyToRub(priceRMB, exchangeRate);
   const commissionRate = getCommissionRate(commission, priceRUB, input.fulfillmentMode || "RFBS");
-  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0, input.paymentFee);
+  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0, input.paymentFee, getInputStarPlanRate(input));
 
   if (M <= 0) {
     const profitPerItem = -totalFixedCost;
@@ -1059,14 +1077,15 @@ export function calculateBreakEvenACOS(
   cpaEnabled: boolean,
   cpaRate: number,
   totalFixedCostWithoutAds: number,
-  paymentFee: number = 0
+  paymentFee: number = 0,
+  starPlanRate: number = 0
 ): number {
   const safePriceRMB = normalizeMoney(priceRMB);
   const safeTotalFixedCostWithoutAds = normalizeMoney(totalFixedCostWithoutAds);
   if (safePriceRMB <= 0) return 0;
   
   // 计算不包含 CPA 的边际贡献率
-  const M = calculateMarginalContribution(commissionRate, withdrawalFee, 0, paymentFee);
+  const M = calculateMarginalContribution(commissionRate, withdrawalFee, 0, paymentFee, starPlanRate);
   
   // 毛利(扣除广告前) = P_rmb × M - F_total_without_ads
   const grossProfitBeforeAds = safePriceRMB * M - safeTotalFixedCostWithoutAds;
@@ -1205,6 +1224,7 @@ export function detectCommissionTierBoundary(
   cpaRate: number,
   totalFixedCost: number,
   paymentFee: number = 0,
+  starPlanRate: number = 0,
   fulfillmentMode: FulfillmentMode = "RFBS"
 ): { 
   isNearBoundary: boolean; 
@@ -1241,8 +1261,8 @@ export function detectCommissionTierBoundary(
       
       // 如果降价后佣金率更低
       if (lowerCommissionRate < currentCommissionRate) {
-        const M_lower = calculateMarginalContribution(lowerCommissionRate, withdrawalFee, cpaRate, paymentFee);
-        const M_current = calculateMarginalContribution(currentCommissionRate, withdrawalFee, cpaRate, paymentFee);
+        const M_lower = calculateMarginalContribution(lowerCommissionRate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
+        const M_current = calculateMarginalContribution(currentCommissionRate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
         
         if (M_lower > 0 && M_current > 0) {
           const profitLower = calculateNetProfit(targetPriceRMB, M_lower, safeTotalFixedCost);
@@ -1306,7 +1326,7 @@ export function detectShippingWeightBoundary(
     if (costSaving > 0.5) { // 只有节省超过 0.5 元才提示
       return {
         isNearBoundary: true,
-        suggestion: `⚠️ 边际提醒：包裹减重 ${weightToReduce.toFixed(0)}g 即可进入下一运费阶梯，每单节省 ¥${costSaving.toFixed(2)}`,
+        suggestion: `⚠️ 边际提醒：包裹减重 ${formatWeightWithKg(weightToReduce)} 即可进入下一运费阶梯，每单节省 ¥${costSaving.toFixed(2)}`,
         weightToReduce,
         costSaving
       };
@@ -1442,7 +1462,7 @@ export function performFullCalculation(
     getChargeableWeight(input.length, input.width, input.height, input.weight, shippingChannel);
 
   if (isVolumetric) {
-    warnings.push(`泡货预警：当前将按体积重 (${chargeableWeight.toFixed(0)} g) 计费，建议优化包装尺寸。`);
+    warnings.push(`泡货预警：当前将按体积重 (${formatWeightWithKg(chargeableWeight)}) 计费，建议优化包装尺寸。`);
   }
   
   // 物流拦截极限检测
@@ -1489,6 +1509,7 @@ export function performFullCalculation(
     input.cpcEnabled && (input.cpcBillingMode || "bidCvr") === "salesPercent"
       ? normalizePercent(input.cpcSalesPercent || 0)
       : 0;
+  const starPlanRate = getInputStarPlanRate(input);
 
   // 退货成本 (RMB)
   const returnCost = calculateReturnCost(
@@ -1510,7 +1531,7 @@ export function performFullCalculation(
 
   // 有效边际贡献率 M
   const cpaRateForM = input.cpaEnabled ? input.cpaRate : 0;
-  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM, input.paymentFee);
+  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM, input.paymentFee, starPlanRate);
 
   // 熔断检测
   if (M <= 0) {
@@ -1526,10 +1547,11 @@ export function performFullCalculation(
   // 提现手续费金额 (RMB) = P_rmb × (1-C%) × W%
   const withdrawalFeeAmount = priceRMB * (1 - normalizePercent(commissionRate) / 100) * (normalizePercent(input.withdrawalFee) / 100);
   const paymentFeeAmount = priceRMB * (normalizePercent(input.paymentFee || 0) / 100);
+  const starPlanFeeAmount = calculateStarPlanFee(input.starPlanEnabled, input.starPlanRate ?? 1.5, priceRMB);
 
   // ROI（投资回报率）= 净利润 ÷ 总成本 × 100%
   // 总成本包含所有实际支出（采购+头程+包装+跨境运费+佣金+提现手续费+支付手续费+广告+退货损耗）
-  const totalCost = totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + cpaCost;
+  const totalCost = totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + starPlanFeeAmount + cpaCost;
   const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
 
   // 销售利润率 = 净利润 / 收入(P_rmb)
@@ -1544,6 +1566,7 @@ export function performFullCalculation(
     totalFixedCost - (variableCpcSalesPercent > 0 ? cpcCost : 0),
     input.paymentFee,
     variableCpcSalesPercent,
+    starPlanRate,
     fulfillmentMode
   );
 
@@ -1557,6 +1580,7 @@ export function performFullCalculation(
     totalFixedCost,
     cpcCost,
     input.paymentFee,
+    starPlanRate,
     fulfillmentMode
   );
   if (blackHoleWarning) {
@@ -1580,7 +1604,8 @@ export function performFullCalculation(
     input.cpaEnabled,
     input.cpaEnabled ? input.cpaRate : 0,
     totalFixedCostWithoutAds,
-    input.paymentFee
+    input.paymentFee,
+    starPlanRate
   );
   
   // 计算当前 ACOS
@@ -1619,6 +1644,7 @@ export function performFullCalculation(
     cpaRateForM,
     totalFixedCost,
     input.paymentFee,
+    starPlanRate,
     fulfillmentMode
   );
   
@@ -1659,7 +1685,8 @@ export function performFullCalculation(
       returnCost,
       withdrawalFee: withdrawalFeeAmount,
       paymentFee: paymentFeeAmount,
-      total: totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + cpaCost,
+      starPlanFee: starPlanFeeAmount,
+      total: totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + starPlanFeeAmount + cpaCost,
     },
     taxes,
     pricingStrategies,

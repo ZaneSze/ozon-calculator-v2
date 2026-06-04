@@ -50,9 +50,15 @@ const {
 } = loadTsModule(path.join("lib", "profit-threshold.ts"));
 
 const {
+  formatWeightParts,
+  formatWeightWithKg,
+} = loadTsModule(path.join("lib", "weight-format.ts"));
+
+const {
   calculateSuggestedPrice,
   calculateCpaCost,
   calculateCpcCost,
+  calculateStarPlanFee,
   calculateExchangeRateStressTest,
   calculateProfitCurve,
   calculateSixTierPricing,
@@ -630,6 +636,23 @@ assertEqual(
   1,
   "payment fee should reduce net profit by 1% of price"
 );
+assertEqual(calculateStarPlanFee(true, 1.5, 200), 3, "star plan fee should equal configured sales percent");
+assertEqual(calculateStarPlanFee(false, 1.5, 200), 0, "disabled star plan should not create cost");
+const starPlanResult = performFullCalculation(
+  { ...baseSuggestionInput, targetPriceRMB: 200, withdrawalFee: 0, paymentFee: 0, starPlanEnabled: true, starPlanRate: 1.5 },
+  suggestionCommission,
+  undefined
+);
+assertApproxEqual(starPlanResult.costs.starPlanFee, 3, "full calculation includes star plan fee");
+assertApproxEqual(
+  paymentFeeBaseResult.netProfit - performFullCalculation(
+    { ...baseSuggestionInput, targetPriceRMB: 100, withdrawalFee: 0, paymentFee: 0, starPlanEnabled: true, starPlanRate: 1.5 },
+    suggestionCommission,
+    undefined
+  ).netProfit,
+  1.5,
+  "star plan should reduce net profit by configured sales percent"
+);
 
 const cpcSalesPercentResult = performFullCalculation(
   {
@@ -933,6 +956,12 @@ assertEqual(isProfitMarginBelowThreshold(20, 20), false, "profit threshold shoul
 assertEqual(isProfitMarginBelowThreshold(19.96, 20), false, "profit threshold should use one-decimal display rounding");
 assertEqual(isProfitMarginBelowThreshold(19.94, 20), true, "profit threshold should warn below display threshold");
 assertEqual(isProfitMarginBelowThreshold(20.04, 20), false, "profit threshold should not warn above threshold");
+assertEqual(formatWeightWithKg(300), "300g (0.30 kg)", "weight formatter small grams");
+assertEqual(formatWeightWithKg(2600), "2,600g (2.60 kg)", "weight formatter kilograms");
+assertEqual(formatWeightWithKg(30000), "30,000g (30.00 kg)", "weight formatter large kilograms");
+assertEqual(formatWeightWithKg(0), "0g (0.00 kg)", "weight formatter zero");
+assertDeepEqual(formatWeightParts(2600), { grams: "2,600g", kg: "2.60 kg" }, "weight formatter should expose split display parts");
+assertEqual(formatWeightParts(Infinity), null, "weight formatter parts should ignore non-finite values");
 assertEqual(normalizePromotionDiscount(-5), 0, "promotion discount should not go below 0%");
 assertEqual(normalizePromotionDiscount(100), 99, "promotion discount should be capped below 100%");
 assertEqual(Number.isFinite(calculateOriginalPrice(100, 100)), true, "original price should stay finite at invalid 100% discount");
@@ -1120,20 +1149,20 @@ assertDeepEqual(
 );
 assertApproxEqual(infinitePreTaxSimulation.preTaxNetProfit, 0, "non-finite pre-tax profit should normalize to zero");
 
-const exchangeStress = calculateExchangeRateStressTest(100, 10, adCommission, 0, 0, 50, 0, 0, "RFBS");
+const exchangeStress = calculateExchangeRateStressTest(100, 10, adCommission, 0, 0, 50, 0, 0, 0, "RFBS");
 assertEqual(exchangeStress.at5PercentDrop < 40, true, "5% worse exchange rate should reduce profit");
 assertEqual(exchangeStress.at10PercentDrop < exchangeStress.at5PercentDrop, true, "10% worse exchange rate should reduce profit more than 5%");
 assertApproxEqual(exchangeStress.zeroProfitRate, 18, "zero-profit exchange rate should be expressed as 1 CNY = N RUB");
 
-const cpcStress = calculateExchangeRateStressTest(200, 10, adCommission, 0, 0, 60, 0, 12, "RFBS");
+const cpcStress = calculateExchangeRateStressTest(200, 10, adCommission, 0, 0, 60, 0, 12, 0, "RFBS");
 const expectedCpcStress5 = calculateNetProfit(200 / 1.05, calculateMarginalContribution(10, 0, 0, 0), 60 + (200 / 1.05) * 0.12);
 assertApproxEqual(cpcStress.at5PercentDrop, expectedCpcStress5, "exchange stress should include sales-percent CPC at stressed RMB revenue");
-const invalidExchangeStress = calculateExchangeRateStressTest(-100, -10, adCommission, -5, -10, -50, -3, -20, "RFBS");
+const invalidExchangeStress = calculateExchangeRateStressTest(-100, -10, adCommission, -5, -10, -50, -3, -20, 0, "RFBS");
 assertEqual(Number.isFinite(invalidExchangeStress.at5PercentDrop), true, "invalid exchange stress should not emit non-finite 5% result");
 assertEqual(Number.isFinite(invalidExchangeStress.at10PercentDrop), true, "invalid exchange stress should not emit non-finite 10% result");
 assertApproxEqual(invalidExchangeStress.zeroProfitRate, 0, "invalid exchange stress should not emit a fake zero-profit exchange rate");
 
-const invalidProfitCurve = calculateProfitCurve([-100, Infinity, 100], -10, adCommission, -5, -10, -50, -3, -20, "RFBS");
+const invalidProfitCurve = calculateProfitCurve([-100, Infinity, 100], -10, adCommission, -5, -10, -50, -3, -20, 0, "RFBS");
 assertDeepEqual(
   invalidProfitCurve.map((point) => ({
     priceRMB: point.priceRMB,
@@ -1149,7 +1178,7 @@ assertDeepEqual(
   ],
   "profit curve should normalize invalid prices and costs"
 );
-const cappedCpcProfitCurve = calculateProfitCurve([100], 10, adCommission, 0, 0, 50, 0, 200, "RFBS");
+const cappedCpcProfitCurve = calculateProfitCurve([100], 10, adCommission, 0, 0, 50, 0, 200, 0, "RFBS");
 assertApproxEqual(
   cappedCpcProfitCurve[0].profit,
   -60,
@@ -1172,7 +1201,7 @@ const marginStrategyCommission = {
   secondaryCategory: "Test",
   tiers: [{ min: 0, max: Infinity, rate: 10 }],
 };
-const marginStrategies = calculatePricingStrategies(marginStrategyCommission, 10, 0, 0, 50, 0, 0, "RFBS");
+const marginStrategies = calculatePricingStrategies(marginStrategyCommission, 10, 0, 0, 50, 0, 0, 0, "RFBS");
 assertApproxEqual(marginStrategies.breakEven, 55.56, "pricing strategy break-even should target 0% sales margin", 0.01);
 assertApproxEqual(marginStrategies.lowProfit, 62.5, "pricing strategy low profit should target 10% sales margin", 0.01);
 assertApproxEqual(marginStrategies.mediumProfit, 71.43, "pricing strategy medium profit should target 20% sales margin", 0.01);
@@ -1182,7 +1211,7 @@ assertApproxEqual(calculateRequiredPriceRMB(-20, 0.8, -50), 0, "required price s
 assertApproxEqual(calculateRequiredPriceRMB(10, 0, 50), 0, "required price should not emit Infinity when marginal contribution is zero");
 assertApproxEqual(calculateRequiredPriceRMB(10, -0.1, 50), 0, "required price should not emit Infinity when marginal contribution is negative");
 assertApproxEqual(calculateRequiredPriceRMB(10, Infinity, 50), 0, "required price should not emit Infinity when marginal contribution is non-finite");
-const malformedStrategies = calculatePricingStrategies(marginStrategyCommission, -10, -5, -10, -50, -3, Infinity, "RFBS");
+const malformedStrategies = calculatePricingStrategies(marginStrategyCommission, -10, -5, -10, -50, -3, Infinity, 0, "RFBS");
 assertDeepEqual(
   Object.values(malformedStrategies).map((value) => Number.isFinite(value) && value >= 0),
   [true, true, true, true],

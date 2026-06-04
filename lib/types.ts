@@ -105,6 +105,8 @@ export interface CalculationInput {
   cpcBid: number; // RUB
   cpcConversionRate: number; // 百分比
   cpcSalesPercent: number; // 按销售额目标百分比计费
+  starPlanEnabled: boolean; // 星星计划：信用卡分期/积分购买支持
+  starPlanRate: number; // 星星计划平台扣点百分比
   
   // 定价参数
   targetPriceRMB: number; // RMB (用户以人民币思维输入售价)
@@ -150,6 +152,7 @@ export interface CalculationResult {
     returnCost: number;
     withdrawalFee: number;
     paymentFee: number;
+    starPlanFee: number;
     total: number;
   };
 

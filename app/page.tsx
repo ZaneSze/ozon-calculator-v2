@@ -53,6 +53,8 @@ import {
 } from "@/lib/template-export";
 import { calculateOzonBackendPricing } from "@/lib/ozon-pricing";
 import { isProfitMarginBelowThreshold } from "@/lib/profit-threshold";
+import { formatWeightWithKg } from "@/lib/weight-format";
+import { WeightWithKg } from "@/components/weight-with-kg";
 import { selectShippingSheetName } from "@/lib/shipping-workbook";
 import { selectCommissionSheetName } from "@/lib/commission-parsing";
 
@@ -80,6 +82,8 @@ const DEFAULT_INPUT: CalculationInput = {
   cpcBid: 10,
   cpcConversionRate: 3,
   cpcSalesPercent: 0,
+  starPlanEnabled: false,
+  starPlanRate: 1.5,
   targetPriceRMB: 125, // RMB（≈1500 RUB）
   promotionDiscount: 0,
   exchangeRate: 12.0, // 1 CNY = 12 RUB
@@ -116,6 +120,8 @@ const EMPTY_INPUT: CalculationInput = {
   cpcBid: 0,
   cpcConversionRate: 0,
   cpcSalesPercent: 0,
+  starPlanEnabled: false,
+  starPlanRate: 1.5,
   targetPriceRMB: 0,
   promotionDiscount: 0,
   withdrawalFee: 0,
@@ -534,6 +540,8 @@ export default function Home() {
           ...parsedData,
           cpcBillingMode: parsedData.cpcBillingMode || "bidCvr",
           cpcSalesPercent: parsedData.cpcSalesPercent || 0,
+          starPlanEnabled: parsedData.starPlanEnabled || false,
+          starPlanRate: parsedData.starPlanRate ?? 1.5,
           valueLimitCurrency: parsedData.valueLimitCurrency || "RMB",
           fulfillmentMode: parsedData.fulfillmentMode || "RFBS",
           tertiaryCategory: parsedData.tertiaryCategory || "",
@@ -759,6 +767,8 @@ export default function Home() {
     effectiveInput.cpcBid,
     effectiveInput.cpcConversionRate,
     effectiveInput.cpcSalesPercent,
+    effectiveInput.starPlanEnabled,
+    effectiveInput.starPlanRate,
     effectiveInput.exchangeRate,
     effectiveInput.withdrawalFee,
     effectiveInput.paymentFee,
@@ -823,11 +833,13 @@ export default function Home() {
       effectiveInput.cpcEnabled && (effectiveInput.cpcBillingMode || "bidCvr") === "salesPercent"
         ? effectiveInput.cpcSalesPercent || 0
         : 0;
+    const starPlanRate = effectiveInput.starPlanEnabled ? effectiveInput.starPlanRate || 1.5 : 0;
     const totalFixedCost = effectiveInput.purchaseCost + effectiveInput.domesticShipping + effectiveInput.packagingFee + internationalShipping + cpcCost + returnCost;
     return {
       totalFixedCost,
       fixedCostForVariablePricing: totalFixedCost - (variableCpcSalesPercent > 0 ? cpcCost : 0),
       variableCpcSalesPercent,
+      starPlanRate,
       cpaRateForM: effectiveInput.cpaEnabled ? effectiveInput.cpaRate : 0,
     };
   }, [effectiveInput, selectedChannel]);
@@ -845,8 +857,8 @@ export default function Home() {
     for (let p = minPrice; p <= maxPrice; p += step) {
       priceRangeRMB.push(parseFloat(p.toFixed(2)));
     }
-    const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent } = totalFixedCostData;
-    return calculateProfitCurve(priceRangeRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, effectiveInput.fulfillmentMode || "RFBS")
+    const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent, starPlanRate } = totalFixedCostData;
+    return calculateProfitCurve(priceRangeRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, starPlanRate, effectiveInput.fulfillmentMode || "RFBS")
       .map((point) => {
         const displayPriceRMB = toDisplayPriceRMB(point.priceRMB);
         return {
@@ -860,8 +872,8 @@ export default function Home() {
   // 汇率抗压测试
   const stressTest = useMemo(() => {
     if (!commission) return { at5PercentDrop: 0, at10PercentDrop: 0, zeroProfitRate: 0 };
-    const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent } = totalFixedCostData;
-    return calculateExchangeRateStressTest(effectiveInput.targetPriceRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, effectiveInput.fulfillmentMode || "RFBS");
+    const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent, starPlanRate } = totalFixedCostData;
+    return calculateExchangeRateStressTest(effectiveInput.targetPriceRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, starPlanRate, effectiveInput.fulfillmentMode || "RFBS");
   }, [commission, effectiveInput, totalFixedCostData]);
 
   // 多件装利润
@@ -1216,7 +1228,7 @@ export default function Home() {
         ...(input.tertiaryCategory ? [["输入", "三级类目", input.tertiaryCategory, ""]] : []),
         ["输入", "经营模式", input.fulfillmentMode || "RFBS", "平台佣金口径"],
         ["输入", "尺寸", `${input.length}x${input.width}x${input.height} cm`, ""],
-        ["输入", "重量", input.weight, "g"],
+        ["输入", "重量", formatWeightWithKg(input.weight), "输入单位仍为 g"],
         ["定价", "售价RMB", input.targetPriceRMB, ""],
         ["定价", "售价RUB", cnyToRub(input.targetPriceRMB, input.exchangeRate).toFixed(0), ""],
         ...(input.exchangeRateBuffer > 0 ? [
@@ -1235,8 +1247,9 @@ export default function Home() {
         ["结果", "利润率", result.profitMargin.toFixed(1), "%"],
         ["成本", "总成本", result.costs.total.toFixed(2), ""],
         ["成本", "支付手续费", result.costs.paymentFee.toFixed(2), `${input.paymentFee || 0}%`],
+        ["成本", "星星计划", (result.costs.starPlanFee || 0).toFixed(2), input.starPlanEnabled ? `${input.starPlanRate || 1.5}%` : "关闭"],
         ["物流", "选中渠道", selectedChannel ? `${selectedChannel.thirdParty}-${selectedChannel.name}` : "无", ""],
-        ["物流", "计费重", result.chargeableWeight.toFixed(0), "g"],
+        ["物流", "计费重", formatWeightWithKg(result.chargeableWeight), "计算单位仍为 g"],
         ["风险", "警告", result.warnings.join(" | "), ""],
         ["建议", "首要建议", firstSuggestion, ""],
         ["汇率", "5%回款恶化利润", stressTest.at5PercentDrop.toFixed(2), "1 CNY = N RUB"],
@@ -1651,8 +1664,13 @@ export default function Home() {
       alerts.push({
         id: "volumetric-billing",
         severity: "warning",
-        label: `计抛: ${selectedBillingInfo.billingWeight.toFixed(0)}g`,
-        plainText: `计抛 ${selectedBillingInfo.billingWeight.toFixed(0)}g`,
+        label: (
+          <span className="inline-flex items-center gap-1">
+            <span>计抛:</span>
+            <WeightWithKg weightG={selectedBillingInfo.billingWeight} kgClassName="text-amber-700/75" />
+          </span>
+        ),
+        plainText: `计抛 ${formatWeightWithKg(selectedBillingInfo.billingWeight)}`,
       });
     }
 
@@ -1678,8 +1696,14 @@ export default function Home() {
       alerts.push({
         id: `weight-save-${Math.round(weightSaved)}`,
         severity: "success",
-        label: `减重${weightSaved.toFixed(0)}g进下一阶梯`,
-        plainText: `减重 ${weightSaved.toFixed(0)}g 进入下一阶梯`,
+        label: (
+          <span className="inline-flex items-center gap-1">
+            <span>减重</span>
+            <WeightWithKg weightG={weightSaved} kgClassName="text-emerald-700/75" />
+            <span>进下一阶梯</span>
+          </span>
+        ),
+        plainText: `减重 ${formatWeightWithKg(weightSaved)} 进入下一阶梯`,
       });
     }
 
@@ -2310,7 +2334,18 @@ export default function Home() {
                     </div>
                     <div className="mt-1 truncate text-white/85">
                       费用 ¥{(channelCosts.get(selectedChannel.id) ?? 0).toFixed(2)}
-                      {selectedBillingInfo?.isVolumetric ? ` · 计抛 ${selectedBillingInfo.billingWeight.toFixed(0)}g` : ` · 实重 ${selectedBillingInfo?.billingWeight?.toFixed(0) || input.weight}g`}
+                      <span className="mx-1">·</span>
+                      {selectedBillingInfo?.isVolumetric ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span>计抛</span>
+                          <WeightWithKg weightG={selectedBillingInfo.billingWeight} kgClassName="text-indigo-100/85" />
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          <span>实重</span>
+                          <WeightWithKg weightG={selectedBillingInfo?.billingWeight || input.weight} kgClassName="text-indigo-100/85" />
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="shrink-0 rounded-md bg-white/15 px-2 py-1 text-[10px] font-bold ring-1 ring-white/25">
@@ -2694,7 +2729,9 @@ function MultiItemConfirmDialog({
               onChange={(e) => onFormChange({ ...initialInput, weight: parseFloat(e.target.value) || 0 })}
               className="h-8 w-full rounded-md border border-slate-200 px-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             />
-            <p className="text-[10px] text-slate-500">每件实际重量（含包装）。多件装总运费 = 单件计费重 × 件数。</p>
+            <p className="text-[10px] text-slate-500">
+              当前单件：<WeightWithKg weightG={initialInput.weight} />。多件装总运费 = 单件计费重 × 件数。
+            </p>
           </div>
 
           <div className="h-px bg-slate-100" />

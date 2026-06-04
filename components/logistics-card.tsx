@@ -3,6 +3,7 @@
 import { Battery, CheckCircle2, Droplets, Ruler, Scale, Star, Timer } from "lucide-react";
 import { ShippingChannel, CalculationInput } from "@/lib/types";
 import { CalculationTrace } from "./mapping-debug-panel";
+import { WeightWithKg } from "@/components/weight-with-kg";
 
 interface LogisticsCardProps {
   channel: ShippingChannel;
@@ -26,6 +27,16 @@ const fDim = (v: number | undefined | null): string => {
   return `≤${v}`;
 };
 
+const fWeightLimit = (min: number | undefined | null, max: number | undefined | null) => {
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-0.5">
+      {hasRealLimitValue(min) ? <WeightWithKg weightG={min} /> : <span>无下限</span>}
+      <span>-</span>
+      {hasRealLimitValue(max) ? <WeightWithKg weightG={max} /> : <span>无上限</span>}
+    </span>
+  );
+};
+
 const hasRealLimitValue = (v: number | undefined | null): v is number => {
   return v !== undefined && v !== null && v !== Infinity && v < 999999;
 };
@@ -39,7 +50,6 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
   // 🔴 核心逻辑：直接使用计算引擎的结果，不做本地判定
   const isVolMetric = billing?.isVolumetric ?? false;
   const volWeight = billing?.volumetricWeight || 0;
-  const actualWeight = billing?.actualWeight || 0;
   
   // 🔴 安全防护：如果抛重异常（超过 50kg），强制关闭标签
   const safetyCheck = volWeight < 50000;  // 50kg 安全阀
@@ -56,7 +66,13 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
     original: cost * 1.1, // 模拟原价
     billingWeight: billing?.billingWeight || 0,
     formula: billing 
-      ? `¥${channel.fixFee.toFixed(2)} + (${billing.billingWeight}g × ¥${varFeePerGram.toFixed(4)})`
+      ? (
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <span>¥{channel.fixFee.toFixed(2)} + (</span>
+          <WeightWithKg weightG={billing.billingWeight} />
+          <span>× ¥{varFeePerGram.toFixed(4)}/g)</span>
+        </span>
+      )
       : '计算中...'
   };
 
@@ -182,7 +198,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
       {/* 4. 限制矩阵 */}
       <div className="ml-1 grid grid-cols-2 gap-1 rounded border border-border bg-secondary p-1.5">
         <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Scale className="h-3 w-3 opacity-70" /> <b className="text-foreground">{limits.minWt}-{fDim(limits.maxWt)}g</b>
+          <Scale className="h-3 w-3 opacity-70" /> <b className="text-foreground">{fWeightLimit(limits.minWt, limits.maxWt)}</b>
         </div>
         <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <Ruler className="h-3 w-3 opacity-70" /> <b className="text-foreground">边{fDim(limits.maxSide)}cm</b>
@@ -204,20 +220,24 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           <span className="transition-transform duration-200 group-open:rotate-180">▼</span> 
           <span>查看计费详情 </span>
           <span className={`font-bold ${billing?.isVolumetric ? "text-[#EF4444]" : "text-foreground"}`}>
-            (计费重: {freightData.billingWeight}g)
+            <span className="inline-flex items-center gap-1">
+              <span>(计费重:</span>
+              <WeightWithKg weightG={freightData.billingWeight} kgClassName={billing?.isVolumetric ? "text-red-500/70" : "text-indigo-500/80"} />
+              <span>)</span>
+            </span>
           </span>
         </summary>
         <div className="mt-2 text-[11px] bg-amber-50/50 p-3 rounded border-2 border-amber-200 space-y-2">
           {/* 实重 */}
           <div className="flex justify-between">
             <span className="text-muted-foreground">实重:</span>
-            <span className="font-medium">{billing?.actualWeight?.toFixed(0) || 0}g</span>
+            <span className="font-medium"><WeightWithKg weightG={billing?.actualWeight || 0} /></span>
           </div>
           {/* 抛重 - 触发时醒目 */}
           <div className="flex justify-between">
             <span className="text-muted-foreground">抛重:</span>
             <span className={`font-bold ${billing?.isVolumetric ? "text-[#F59E0B] bg-amber-100 px-1.5 rounded" : ""}`}>
-              {billing?.volumetricWeight?.toFixed(0) || 0}g
+              <WeightWithKg weightG={billing?.volumetricWeight || 0} kgClassName={billing?.isVolumetric ? "text-amber-700/75" : undefined} />
               {billing?.isVolumetric && " ⚠️"}
             </span>
           </div>
@@ -225,7 +245,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           <div className="flex justify-between font-bold pt-2 border-t-2 border-amber-300">
             <span>计费重:</span>
             <span className={`text-lg ${billing?.isVolumetric ? "text-[#EF4444] bg-red-100 px-2 rounded" : "text-[#6366F1] bg-indigo-100 px-2 rounded"}`}>
-              {billing?.billingWeight?.toFixed(0) || 0}g
+              <WeightWithKg weightG={billing?.billingWeight || 0} kgClassName={billing?.isVolumetric ? "text-red-500/70" : "text-indigo-500/75"} />
             </span>
           </div>
           {/* 计算公式 - 等宽字体 */}
