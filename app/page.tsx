@@ -84,6 +84,8 @@ const DEFAULT_INPUT: CalculationInput = {
   cpcSalesPercent: 0,
   starPlanEnabled: false,
   starPlanRate: 1.5,
+  ozonPremiumEnabled: false,
+  ozonPremiumRate: 2.5,
   targetPriceRMB: 125, // RMB（≈1500 RUB）
   promotionDiscount: 0,
   exchangeRate: 12.0, // 1 CNY = 12 RUB
@@ -122,6 +124,8 @@ const EMPTY_INPUT: CalculationInput = {
   cpcSalesPercent: 0,
   starPlanEnabled: false,
   starPlanRate: 1.5,
+  ozonPremiumEnabled: false,
+  ozonPremiumRate: 2.5,
   targetPriceRMB: 0,
   promotionDiscount: 0,
   withdrawalFee: 0,
@@ -542,6 +546,8 @@ export default function Home() {
           cpcSalesPercent: parsedData.cpcSalesPercent || 0,
           starPlanEnabled: parsedData.starPlanEnabled || false,
           starPlanRate: parsedData.starPlanRate ?? 1.5,
+          ozonPremiumEnabled: parsedData.ozonPremiumEnabled || false,
+          ozonPremiumRate: parsedData.ozonPremiumRate ?? 2.5,
           valueLimitCurrency: parsedData.valueLimitCurrency || "RMB",
           fulfillmentMode: parsedData.fulfillmentMode || "RFBS",
           tertiaryCategory: parsedData.tertiaryCategory || "",
@@ -769,6 +775,8 @@ export default function Home() {
     effectiveInput.cpcSalesPercent,
     effectiveInput.starPlanEnabled,
     effectiveInput.starPlanRate,
+    effectiveInput.ozonPremiumEnabled,
+    effectiveInput.ozonPremiumRate,
     effectiveInput.exchangeRate,
     effectiveInput.withdrawalFee,
     effectiveInput.paymentFee,
@@ -833,13 +841,15 @@ export default function Home() {
       effectiveInput.cpcEnabled && (effectiveInput.cpcBillingMode || "bidCvr") === "salesPercent"
         ? effectiveInput.cpcSalesPercent || 0
         : 0;
-    const starPlanRate = effectiveInput.starPlanEnabled ? effectiveInput.starPlanRate || 1.5 : 0;
+    const platformProgramRate =
+      (effectiveInput.starPlanEnabled ? effectiveInput.starPlanRate || 1.5 : 0) +
+      (effectiveInput.ozonPremiumEnabled ? effectiveInput.ozonPremiumRate || 2.5 : 0);
     const totalFixedCost = effectiveInput.purchaseCost + effectiveInput.domesticShipping + effectiveInput.packagingFee + internationalShipping + cpcCost + returnCost;
     return {
       totalFixedCost,
       fixedCostForVariablePricing: totalFixedCost - (variableCpcSalesPercent > 0 ? cpcCost : 0),
       variableCpcSalesPercent,
-      starPlanRate,
+      platformProgramRate,
       cpaRateForM: effectiveInput.cpaEnabled ? effectiveInput.cpaRate : 0,
     };
   }, [effectiveInput, selectedChannel]);
@@ -857,8 +867,8 @@ export default function Home() {
     for (let p = minPrice; p <= maxPrice; p += step) {
       priceRangeRMB.push(parseFloat(p.toFixed(2)));
     }
-    const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent, starPlanRate } = totalFixedCostData;
-    return calculateProfitCurve(priceRangeRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, starPlanRate, effectiveInput.fulfillmentMode || "RFBS")
+    const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent, platformProgramRate } = totalFixedCostData;
+    return calculateProfitCurve(priceRangeRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, platformProgramRate, effectiveInput.fulfillmentMode || "RFBS")
       .map((point) => {
         const displayPriceRMB = toDisplayPriceRMB(point.priceRMB);
         return {
@@ -872,8 +882,8 @@ export default function Home() {
   // 汇率抗压测试
   const stressTest = useMemo(() => {
     if (!commission) return { at5PercentDrop: 0, at10PercentDrop: 0, zeroProfitRate: 0 };
-    const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent, starPlanRate } = totalFixedCostData;
-    return calculateExchangeRateStressTest(effectiveInput.targetPriceRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, starPlanRate, effectiveInput.fulfillmentMode || "RFBS");
+    const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent, platformProgramRate } = totalFixedCostData;
+    return calculateExchangeRateStressTest(effectiveInput.targetPriceRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, platformProgramRate, effectiveInput.fulfillmentMode || "RFBS");
   }, [commission, effectiveInput, totalFixedCostData]);
 
   // 多件装利润
@@ -1248,6 +1258,7 @@ export default function Home() {
         ["成本", "总成本", result.costs.total.toFixed(2), ""],
         ["成本", "支付手续费", result.costs.paymentFee.toFixed(2), `${input.paymentFee || 0}%`],
         ["成本", "星星计划", (result.costs.starPlanFee || 0).toFixed(2), input.starPlanEnabled ? `${input.starPlanRate || 1.5}%` : "关闭"],
+        ["成本", "Ozon Premium", (result.costs.ozonPremiumFee || 0).toFixed(2), input.ozonPremiumEnabled ? `${input.ozonPremiumRate || 2.5}%` : "关闭"],
         ["物流", "选中渠道", selectedChannel ? `${selectedChannel.thirdParty}-${selectedChannel.name}` : "无", ""],
         ["物流", "计费重", formatWeightWithKg(result.chargeableWeight), "计算单位仍为 g"],
         ["风险", "警告", result.warnings.join(" | "), ""],

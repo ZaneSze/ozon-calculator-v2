@@ -357,6 +357,7 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
   const cpcBillingMode = input.cpcBillingMode || "bidCvr";
   const cpcSalesCostRMB = input.targetPriceRMB > 0 ? input.targetPriceRMB * ((input.cpcSalesPercent || 0) / 100) : 0;
   const starPlanCostRMB = input.starPlanEnabled && input.targetPriceRMB > 0 ? input.targetPriceRMB * ((input.starPlanRate ?? 1.5) / 100) : 0;
+  const ozonPremiumCostRMB = input.ozonPremiumEnabled && input.targetPriceRMB > 0 ? input.targetPriceRMB * ((input.ozonPremiumRate ?? 2.5) / 100) : 0;
   const cpcBidCostRUB = input.cpcConversionRate > 0 ? input.cpcBid / (input.cpcConversionRate / 100) : 0;
   const cpcBidCostRMB = input.exchangeRate > 0 ? cpcBidCostRUB / input.exchangeRate : 0;
 
@@ -722,7 +723,7 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
       <Section
         id="ads"
         title="广告推广"
-        summary={`CPA${input.cpaEnabled ? "开" : "关"} / CPC${input.cpcEnabled ? "开" : "关"} / 星星${input.starPlanEnabled ? "开" : "关"}`}
+        summary={`CPA${input.cpaEnabled ? "开" : "关"} / CPC${input.cpcEnabled ? "开" : "关"} / 星星${input.starPlanEnabled ? "开" : "关"} / Premium${input.ozonPremiumEnabled ? "开" : "关"}`}
         icon={<Megaphone className="h-4 w-4" />}
         openSections={openSections}
         setOpenSections={setOpenSections}
@@ -938,9 +939,53 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
               </div>
             </div>
           </div>
+
+          {/* Ozon Premium */}
+          <div className="space-y-2 rounded-lg border border-sky-100 bg-sky-50/45 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <Label className="text-xs font-medium">Ozon Premium 订阅</Label>
+                <div className="mt-0.5 text-[10px] leading-snug text-slate-500">
+                  卖家开通 Premium 后，平台按销售额扣点
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => updateField("ozonPremiumEnabled", !input.ozonPremiumEnabled)}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-sky-300 focus:ring-offset-1 ${
+                  input.ozonPremiumEnabled
+                    ? "bg-sky-600 text-white shadow-sm"
+                    : "bg-slate-200 text-slate-500"
+                }`}
+                aria-label={input.ozonPremiumEnabled ? "关闭 Ozon Premium" : "开启 Ozon Premium"}
+              >
+                {input.ozonPremiumEnabled ? "ON" : "OFF"}
+              </button>
+            </div>
+            <div className={`transition-opacity ${input.ozonPremiumEnabled ? "opacity-100" : "opacity-45 pointer-events-none"}`}>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={numberInputValue(input.ozonPremiumRate ?? 2.5)}
+                  onChange={(e) => updateField("ozonPremiumRate", parseFloat(e.target.value) || 0)}
+                  className="h-8 text-sm"
+                  disabled={!input.ozonPremiumEnabled}
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+                {input.ozonPremiumEnabled && (input.ozonPremiumRate ?? 0) > 0 && (
+                  <span className="rounded bg-white/75 px-1.5 py-0.5 text-xs text-sky-700">
+                    扣费: ¥{ozonPremiumCostRMB.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
           
           {/* 广告风控面板 */}
-          {adRiskControl && (input.cpaEnabled || input.cpcEnabled || input.starPlanEnabled) && (
+          {adRiskControl && (input.cpaEnabled || input.cpcEnabled || input.starPlanEnabled || input.ozonPremiumEnabled) && (
             <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
               {/* 保本 ACOS 显示 */}
               <div className="flex items-center justify-between text-xs">

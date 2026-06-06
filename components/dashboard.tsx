@@ -198,6 +198,7 @@ export function Dashboard({
       result.costs.withdrawalFee -
       result.costs.paymentFee -
       (result.costs.starPlanFee || 0) -
+      (result.costs.ozonPremiumFee || 0) -
       result.costs.cpaCost -
       (cpcSalesPercent > 0 ? result.costs.cpcCost : 0);
 
@@ -229,7 +230,8 @@ export function Dashboard({
       input.withdrawalFee,
       exchangeScenarioBase.cpaRateForM,
       input.paymentFee,
-      input.starPlanEnabled ? input.starPlanRate || 1.5 : 0
+      (input.starPlanEnabled ? input.starPlanRate || 1.5 : 0) +
+      (input.ozonPremiumEnabled ? input.ozonPremiumRate || 2.5 : 0)
     );
     const marginAfterSalesCpc = baseM - Math.max(0, exchangeScenarioBase.cpcSalesPercent || 0) / 100;
     const profit =
@@ -244,6 +246,8 @@ export function Dashboard({
     exchangeScenarioBase,
     input.fulfillmentMode,
     input.paymentFee,
+    input.ozonPremiumEnabled,
+    input.ozonPremiumRate,
     input.starPlanEnabled,
     input.starPlanRate,
     input.withdrawalFee,
@@ -276,6 +280,7 @@ export function Dashboard({
       { name: "提现手续费", value: result.costs.withdrawalFee },
       { name: "支付手续费", value: result.costs.paymentFee },
       { name: "星星计划", value: result.costs.starPlanFee || 0 },
+      { name: "Ozon Premium", value: result.costs.ozonPremiumFee || 0 },
       { name: "广告支出", value: result.costs.cpaCost + result.costs.cpcCost },
       { name: "退货损耗", value: result.costs.returnCost },
       ...(result.taxes?.enabled
@@ -564,6 +569,7 @@ export function Dashboard({
       { label: "平台佣金", value: result.costs.commission, color: "#10B981" },
       { label: "支付手续费", value: result.costs.paymentFee, color: "#8B5CF6" },
       { label: "星星计划", value: result.costs.starPlanFee || 0, color: "#EC4899" },
+      { label: "Ozon Premium", value: result.costs.ozonPremiumFee || 0, color: "#0EA5E9" },
       { label: "提现手续费", value: result.costs.withdrawalFee, color: "#06B6D4" },
       { label: "退损预估", value: result.costs.returnCost, color: "#F97316" },
       { label: "广告费用", value: result.costs.cpaCost + result.costs.cpcCost, color: "#3B82F6" },
