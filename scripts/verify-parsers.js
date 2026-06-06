@@ -59,6 +59,7 @@ const {
   calculateCpaCost,
   calculateCpcCost,
   calculateStarPlanFee,
+  calculateOzonPremiumFee,
   calculateExchangeRateStressTest,
   calculateProfitCurve,
   calculateSixTierPricing,
@@ -638,6 +639,8 @@ assertEqual(
 );
 assertEqual(calculateStarPlanFee(true, 1.5, 200), 3, "star plan fee should equal configured sales percent");
 assertEqual(calculateStarPlanFee(false, 1.5, 200), 0, "disabled star plan should not create cost");
+assertEqual(calculateOzonPremiumFee(true, 2.5, 200), 5, "ozon premium fee should equal configured sales percent");
+assertEqual(calculateOzonPremiumFee(false, 2.5, 200), 0, "disabled ozon premium should not create cost");
 const starPlanResult = performFullCalculation(
   { ...baseSuggestionInput, targetPriceRMB: 200, withdrawalFee: 0, paymentFee: 0, starPlanEnabled: true, starPlanRate: 1.5 },
   suggestionCommission,
@@ -652,6 +655,21 @@ assertApproxEqual(
   ).netProfit,
   1.5,
   "star plan should reduce net profit by configured sales percent"
+);
+const ozonPremiumResult = performFullCalculation(
+  { ...baseSuggestionInput, targetPriceRMB: 200, withdrawalFee: 0, paymentFee: 0, ozonPremiumEnabled: true, ozonPremiumRate: 2.5 },
+  suggestionCommission,
+  undefined
+);
+assertApproxEqual(ozonPremiumResult.costs.ozonPremiumFee, 5, "full calculation includes ozon premium fee");
+assertApproxEqual(
+  paymentFeeBaseResult.netProfit - performFullCalculation(
+    { ...baseSuggestionInput, targetPriceRMB: 100, withdrawalFee: 0, paymentFee: 0, ozonPremiumEnabled: true, ozonPremiumRate: 2.5 },
+    suggestionCommission,
+    undefined
+  ).netProfit,
+  2.5,
+  "ozon premium should reduce net profit by configured sales percent"
 );
 
 const cpcSalesPercentResult = performFullCalculation(

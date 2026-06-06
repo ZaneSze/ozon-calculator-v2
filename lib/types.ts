@@ -107,6 +107,8 @@ export interface CalculationInput {
   cpcSalesPercent: number; // 按销售额目标百分比计费
   starPlanEnabled: boolean; // 星星计划：信用卡分期/积分购买支持
   starPlanRate: number; // 星星计划平台扣点百分比
+  ozonPremiumEnabled: boolean; // Ozon Premium 订阅扣点
+  ozonPremiumRate: number; // Ozon Premium 平台扣点百分比
   
   // 定价参数
   targetPriceRMB: number; // RMB (用户以人民币思维输入售价)
@@ -153,6 +155,7 @@ export interface CalculationResult {
     withdrawalFee: number;
     paymentFee: number;
     starPlanFee: number;
+    ozonPremiumFee: number;
     total: number;
   };
 

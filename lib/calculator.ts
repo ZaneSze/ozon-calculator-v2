@@ -269,8 +269,21 @@ export function calculateStarPlanFee(starPlanEnabled: boolean, starPlanRate: num
   return normalizeMoney(priceRMB) * (normalizePercent(starPlanRate) / 100);
 }
 
+export function calculateOzonPremiumFee(ozonPremiumEnabled: boolean, ozonPremiumRate: number, priceRMB: number): number {
+  if (!ozonPremiumEnabled) return 0;
+  return normalizeMoney(priceRMB) * (normalizePercent(ozonPremiumRate) / 100);
+}
+
 function getInputStarPlanRate(input: CalculationInput): number {
   return input.starPlanEnabled ? normalizePercent(input.starPlanRate ?? 1.5) : 0;
+}
+
+function getInputOzonPremiumRate(input: CalculationInput): number {
+  return input.ozonPremiumEnabled ? normalizePercent(input.ozonPremiumRate ?? 2.5) : 0;
+}
+
+function getInputPlatformProgramRate(input: CalculationInput): number {
+  return getInputStarPlanRate(input) + getInputOzonPremiumRate(input);
 }
 
 /**
@@ -289,7 +302,7 @@ export function calculateCpaCost(
 
 /**
  * 计算有效边际贡献率 M
- * M = (1 - C) × (1 - W) - A_cpa - P_fee
+ * M = (1 - C) × (1 - W) - A_cpa - P_fee - 平台项目扣点
  */
 export function calculateMarginalContribution(
   commissionRate: number,
@@ -302,8 +315,8 @@ export function calculateMarginalContribution(
   const W = normalizePercent(withdrawalFee) / 100;
   const Acpa = normalizePercent(cpaRate) / 100;
   const Pfee = normalizePercent(paymentFee) / 100;
-  const StarFee = normalizePercent(starPlanRate) / 100;
-  return (1 - C) * (1 - W) - Acpa - Pfee - StarFee;
+  const platformProgramFee = normalizePercent(starPlanRate) / 100;
+  return (1 - C) * (1 - W) - Acpa - Pfee - platformProgramFee;
 }
 
 /**
@@ -365,7 +378,7 @@ export function reversePriceFromMargin(
     input.cpcEnabled && (input.cpcBillingMode || "bidCvr") === "salesPercent"
       ? normalizePercent(input.cpcSalesPercent || 0) / 100
       : 0;
-  const starPlanRate = getInputStarPlanRate(input);
+  const platformProgramRate = getInputPlatformProgramRate(input);
   
   // 1. 计算不依赖售价的固定成本部分
   const purchaseCost = normalizeMoney(input.purchaseCost);
@@ -396,7 +409,7 @@ export function reversePriceFromMargin(
     
     // 计算边际贡献率 M
     const cpaRateForM = input.cpaEnabled ? input.cpaRate : 0;
-    const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM, input.paymentFee, starPlanRate);
+    const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM, input.paymentFee, platformProgramRate);
     
     // 熔断检测：销售额比例 CPC 会占用利润率空间，必须进入反推分母。
     const denominator = M - T_m - variableCpcRate;
@@ -404,7 +417,7 @@ export function reversePriceFromMargin(
       return {
         priceRMB: 0,
         commissionRate,
-        error: `目标利润率过高！当前佣金${commissionRate}%、广告率${cpaRateForM}%、CPC销售额占比${(variableCpcRate * 100).toFixed(1)}%、星星计划${starPlanRate.toFixed(1)}%、提现手续费${input.withdrawalFee}%、支付手续费${input.paymentFee || 0}%已占据过多空间，最大可实现利润率为 ${((M - variableCpcRate) * 100).toFixed(1)}%`
+        error: `目标利润率过高！当前佣金${commissionRate}%、广告率${cpaRateForM}%、CPC销售额占比${(variableCpcRate * 100).toFixed(1)}%、平台项目扣点${platformProgramRate.toFixed(1)}%、提现手续费${input.withdrawalFee}%、支付手续费${input.paymentFee || 0}%已占据过多空间，最大可实现利润率为 ${((M - variableCpcRate) * 100).toFixed(1)}%`
       };
     }
     
@@ -443,7 +456,7 @@ export function reversePriceFromMargin(
   const validation = validatePriceForTier(currentPriceRMB, input.exchangeRate, commission, input.fulfillmentMode || "RFBS");
   if (!validation.valid) {
     // 跨阶梯了，再迭代一轮
-    const M = calculateMarginalContribution(finalCommissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0, input.paymentFee, starPlanRate);
+    const M = calculateMarginalContribution(finalCommissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0, input.paymentFee, platformProgramRate);
     const denominator = M - T_m - variableCpcRate;
     if (denominator <= 0) {
       return {
@@ -543,7 +556,7 @@ export function calculateSixTierPricing(
   const withdrawalFee = parseFiniteNumber(input.withdrawalFee, 1.5);
   const paymentFee = parseFiniteNumber(input.paymentFee, 0);
   const cpaRate = input.cpaEnabled ? parseFiniteNumber(input.cpaRate, 0) : 0;
-  const starPlanRate = getInputStarPlanRate(input);
+  const platformProgramRate = getInputPlatformProgramRate(input);
   const variableCpcRate =
     input.cpcEnabled && (input.cpcBillingMode || "bidCvr") === "salesPercent"
       ? normalizePercent(input.cpcSalesPercent || 0) / 100
@@ -572,7 +585,7 @@ export function calculateSixTierPricing(
       finalCommissionRate = commissionRate;
       
       // 3. 计算边际贡献率 M
-      const M = calculateMarginalContribution(commissionRate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
+      const M = calculateMarginalContribution(commissionRate, withdrawalFee, cpaRate, paymentFee, platformProgramRate);
       finalM = M;
       
       // 4. 检查分母：销售额比例 CPC 占用利润率空间，必须进入分母。
@@ -610,7 +623,7 @@ export function calculateSixTierPricing(
         variableCpcRate > 0 ? priceRMB * variableCpcRate : calculateInputCpcCost(input, priceRMB);
       const marginForPrice = (priceRMB: number) => {
         const rate = getCommissionRate(commission, cnyToRub(priceRMB, exchangeRate), input.fulfillmentMode || "RFBS");
-        const M = calculateMarginalContribution(rate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
+        const M = calculateMarginalContribution(rate, withdrawalFee, cpaRate, paymentFee, platformProgramRate);
         return priceRMB > 0
           ? (calculateNetProfit(priceRMB, M, fixedCost + cpcCostForPrice(priceRMB)) / priceRMB) * 100
           : -Infinity;
@@ -657,7 +670,7 @@ export function calculateSixTierPricing(
         finalPriceRMB = selectedPriceRMB;
         finalPriceRUB = parseFloat(cnyToRub(finalPriceRMB, exchangeRate).toFixed(0));
         finalCommissionRate = getCommissionRate(commission, cnyToRub(finalPriceRMB, exchangeRate), input.fulfillmentMode || "RFBS");
-        finalM = calculateMarginalContribution(finalCommissionRate, withdrawalFee, cpaRate, paymentFee, starPlanRate);
+        finalM = calculateMarginalContribution(finalCommissionRate, withdrawalFee, cpaRate, paymentFee, platformProgramRate);
       }
     }
     
@@ -1000,7 +1013,7 @@ export function calculateMultiItemProfit(
 
   const priceRUB = cnyToRub(priceRMB, exchangeRate);
   const commissionRate = getCommissionRate(commission, priceRUB, input.fulfillmentMode || "RFBS");
-  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0, input.paymentFee, getInputStarPlanRate(input));
+  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0, input.paymentFee, getInputPlatformProgramRate(input));
 
   if (M <= 0) {
     const profitPerItem = -totalFixedCost;
@@ -1509,7 +1522,7 @@ export function performFullCalculation(
     input.cpcEnabled && (input.cpcBillingMode || "bidCvr") === "salesPercent"
       ? normalizePercent(input.cpcSalesPercent || 0)
       : 0;
-  const starPlanRate = getInputStarPlanRate(input);
+  const platformProgramRate = getInputPlatformProgramRate(input);
 
   // 退货成本 (RMB)
   const returnCost = calculateReturnCost(
@@ -1531,7 +1544,7 @@ export function performFullCalculation(
 
   // 有效边际贡献率 M
   const cpaRateForM = input.cpaEnabled ? input.cpaRate : 0;
-  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM, input.paymentFee, starPlanRate);
+  const M = calculateMarginalContribution(commissionRate, input.withdrawalFee, cpaRateForM, input.paymentFee, platformProgramRate);
 
   // 熔断检测
   if (M <= 0) {
@@ -1548,10 +1561,11 @@ export function performFullCalculation(
   const withdrawalFeeAmount = priceRMB * (1 - normalizePercent(commissionRate) / 100) * (normalizePercent(input.withdrawalFee) / 100);
   const paymentFeeAmount = priceRMB * (normalizePercent(input.paymentFee || 0) / 100);
   const starPlanFeeAmount = calculateStarPlanFee(input.starPlanEnabled, input.starPlanRate ?? 1.5, priceRMB);
+  const ozonPremiumFeeAmount = calculateOzonPremiumFee(input.ozonPremiumEnabled, input.ozonPremiumRate ?? 2.5, priceRMB);
 
   // ROI（投资回报率）= 净利润 ÷ 总成本 × 100%
   // 总成本包含所有实际支出（采购+头程+包装+跨境运费+佣金+提现手续费+支付手续费+广告+退货损耗）
-  const totalCost = totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + starPlanFeeAmount + cpaCost;
+  const totalCost = totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + starPlanFeeAmount + ozonPremiumFeeAmount + cpaCost;
   const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
 
   // 销售利润率 = 净利润 / 收入(P_rmb)
@@ -1566,7 +1580,7 @@ export function performFullCalculation(
     totalFixedCost - (variableCpcSalesPercent > 0 ? cpcCost : 0),
     input.paymentFee,
     variableCpcSalesPercent,
-    starPlanRate,
+    platformProgramRate,
     fulfillmentMode
   );
 
@@ -1580,7 +1594,7 @@ export function performFullCalculation(
     totalFixedCost,
     cpcCost,
     input.paymentFee,
-    starPlanRate,
+    platformProgramRate,
     fulfillmentMode
   );
   if (blackHoleWarning) {
@@ -1605,7 +1619,7 @@ export function performFullCalculation(
     input.cpaEnabled ? input.cpaRate : 0,
     totalFixedCostWithoutAds,
     input.paymentFee,
-    starPlanRate
+    platformProgramRate
   );
   
   // 计算当前 ACOS
@@ -1644,7 +1658,7 @@ export function performFullCalculation(
     cpaRateForM,
     totalFixedCost,
     input.paymentFee,
-    starPlanRate,
+    platformProgramRate,
     fulfillmentMode
   );
   
@@ -1686,7 +1700,8 @@ export function performFullCalculation(
       withdrawalFee: withdrawalFeeAmount,
       paymentFee: paymentFeeAmount,
       starPlanFee: starPlanFeeAmount,
-      total: totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + starPlanFeeAmount + cpaCost,
+      ozonPremiumFee: ozonPremiumFeeAmount,
+      total: totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + starPlanFeeAmount + ozonPremiumFeeAmount + cpaCost,
     },
     taxes,
     pricingStrategies,
