@@ -493,13 +493,16 @@ export function Dashboard({
       }
     }
 
-    if (result.taxes?.enabled && result.taxes.afterTaxNetProfit < result.netProfit) {
-      actions.push({
-        title: "按税后利润复核售价",
-        reason: "已开启税务模拟，默认净利不再代表最终留存",
-        impact: `税后净利 ¥${result.taxes.afterTaxNetProfit.toFixed(2)}`,
-        tone: result.taxes.afterTaxNetProfit >= 0 ? "blue" : "red",
-      });
+    if (result.taxes?.enabled) {
+      const taxBurden = result.taxes.vatPayable + result.taxes.corporateTax;
+      if (taxBurden > 0) {
+        actions.push({
+          title: "税务成本已含入净利",
+          reason: `增值税 ¥${result.taxes.vatPayable.toFixed(2)} + 所得税 ¥${result.taxes.corporateTax.toFixed(2)}`,
+          impact: `已扣税 ¥${taxBurden.toFixed(2)}`,
+          tone: result.netProfit >= 0 ? "blue" : "red",
+        });
+      }
     }
 
     if (actions.length === 0) {

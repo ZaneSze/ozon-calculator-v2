@@ -1252,7 +1252,7 @@ export default function Home() {
           ["定价", "Ozon后台定价RUB", ozonPricing.ozonBackendPriceRUB, "参考平台币种"],
           ["定价", "Ozon折扣前价格RUB", ozonPricing.ozonOriginalPriceRUB, "参考平台币种"],
         ] : []),
-        ["结果", "净利润", result.netProfit.toFixed(2), "默认税前口径"],
+        ["结果", "净利润", result.netProfit.toFixed(2), result.taxes?.enabled ? "已含税" : "默认税前口径"],
         ["结果", "ROI", result.roi.toFixed(1), "%"],
         ["结果", "利润率", result.profitMargin.toFixed(1), "%"],
         ["成本", "总成本", result.costs.total.toFixed(2), ""],
@@ -1268,7 +1268,6 @@ export default function Home() {
         ...(activeTax ? [
           ["税务", "增值税估算", activeTax.vatPayable.toFixed(2), ""],
           ["税务", "企业所得税", activeTax.corporateTax.toFixed(2), ""],
-          ["税务", "税后净利", activeTax.afterTaxNetProfit.toFixed(2), ""],
         ] : []),
       ]
     );

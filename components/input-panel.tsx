@@ -142,6 +142,15 @@ function optionalNumberInputValue(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/** 状态色标：开=绿色 / 关=灰色 */
+function StatusColor({ on, label }: { on: boolean; label: string }) {
+  return (
+    <span className={`font-semibold ${on ? "text-green-600" : "text-gray-400"}`}>
+      {label}{on ? "开" : "关"}
+    </span>
+  );
+}
+
 function Section({
   id,
   title,
@@ -170,13 +179,13 @@ function Section({
         setOpenSections((current) => current[id] === isOpen ? current : { ...current, [id]: isOpen });
       }}
     >
-      <summary className="flex h-9 cursor-pointer list-none items-center justify-between gap-2 px-2.5 text-sm font-semibold">
+      <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-1 text-sm font-semibold">
         <span className="flex min-w-0 items-center gap-2">
           {icon}
           <span className="shrink-0">{title}</span>
-          <span className="truncate text-[11px] font-medium text-muted-foreground">{summary}</span>
+          <span className="text-[11px] font-medium text-muted-foreground">{summary}</span>
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+        <ChevronDown className="h-4 w-4 shrink-0 self-start mt-1.5 text-slate-400 transition-transform group-open:rotate-180" />
       </summary>
       <div className="border-t border-slate-100 p-2.5">{children}</div>
     </details>
@@ -372,6 +381,13 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
           <span className="inline-flex min-w-0 items-center gap-1">
             <span className="truncate">{input.length}×{input.width}×{input.height}cm /</span>
             <WeightWithKg weightG={input.weight} />
+            <span className="text-gray-300 mx-0.5">|</span>
+            <span className={`font-semibold ${input.hasBattery ? "text-green-600" : "text-gray-400 line-through"}`}>
+              电
+            </span>
+            <span className={`font-semibold ${input.hasLiquid ? "text-green-600" : "text-gray-400 line-through"}`}>
+              液
+            </span>
           </span>
         )}
         icon={<Package className="h-4 w-4" />}
@@ -723,7 +739,17 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
       <Section
         id="ads"
         title="广告推广"
-        summary={`CPA${input.cpaEnabled ? "开" : "关"} / CPC${input.cpcEnabled ? "开" : "关"} / 星星${input.starPlanEnabled ? "开" : "关"} / Premium${input.ozonPremiumEnabled ? "开" : "关"}`}
+        summary={(
+          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+            <StatusColor on={input.cpaEnabled} label="CPA" />
+            <span className="text-gray-300">/</span>
+            <StatusColor on={input.cpcEnabled} label="CPC" />
+            <span className="text-gray-300">/</span>
+            <StatusColor on={input.starPlanEnabled} label="星星" />
+            <span className="text-gray-300">/</span>
+            <StatusColor on={input.ozonPremiumEnabled} label="Premium" />
+          </span>
+        )}
         icon={<Megaphone className="h-4 w-4" />}
         openSections={openSections}
         setOpenSections={setOpenSections}
@@ -1059,7 +1085,15 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
       <Section
         id="pricing"
         title="定价税务"
-        summary={`售价 ¥${input.targetPriceRMB || 0} / 支付 ${input.paymentFee || 0}% / 税金${input.taxEnabled ? "开" : "关"}`}
+        summary={(
+          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+            <span>售价 ¥{input.targetPriceRMB || 0}</span>
+            <span className="text-gray-300">/</span>
+            <span>支付 {input.paymentFee || 0}%</span>
+            <span className="text-gray-300">/</span>
+            <StatusColor on={input.taxEnabled} label="税金" />
+          </span>
+        )}
         icon={<Tag className="h-4 w-4" />}
         openSections={openSections}
         setOpenSections={setOpenSections}
@@ -1426,26 +1460,14 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
               <button
                 type="button"
                 onClick={() => updateField("taxEnabled", !input.taxEnabled)}
-                className={`relative inline-flex h-8 w-[76px] shrink-0 items-center rounded-full border-2 px-1 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:ring-offset-1 ${
                   input.taxEnabled
-                    ? "border-emerald-600 bg-emerald-600 text-white focus:ring-emerald-300"
-                    : "border-slate-300 bg-slate-200 text-slate-500 focus:ring-slate-300"
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "bg-slate-200 text-slate-500"
                 }`}
-                aria-pressed={input.taxEnabled}
                 aria-label={input.taxEnabled ? "关闭税务模拟" : "开启税务模拟"}
-                data-testid="tax-toggle"
               >
-                <span
-                  className={`absolute h-6 w-6 rounded-full bg-white shadow transition-transform ${
-                    input.taxEnabled ? "translate-x-[42px]" : "translate-x-0"
-                  }`}
-                />
-                <span className={`relative z-10 flex-1 text-center text-[10px] font-extrabold ${input.taxEnabled ? "opacity-0" : "opacity-100"}`}>
-                  OFF
-                </span>
-                <span className={`relative z-10 flex-1 text-center text-[10px] font-extrabold ${input.taxEnabled ? "opacity-100" : "opacity-0"}`}>
-                  ON
-                </span>
+                {input.taxEnabled ? "ON" : "OFF"}
               </button>
             </div>
             <div className={`grid grid-cols-2 gap-2 ${input.taxEnabled ? "opacity-100" : "opacity-45"}`}>
