@@ -1027,7 +1027,7 @@ export function calculateMultiItemProfit(
 
   // 🔹 税务模拟（仅影响税后口径）
   const taxes = calculateTaxSimulation(input, profitPerItem);
-  if (taxes.enabled) {
+  if (taxes!.enabled) {
     const afterTaxPerItem = taxes.afterTaxNetProfit;
     const afterTaxTotal = afterTaxPerItem * normalizedItemCount;
     return { profitPerItem: afterTaxPerItem, totalProfit: afterTaxTotal, profitMargin: revenue > 0 ? (afterTaxTotal / revenue) * 100 : 0 };
