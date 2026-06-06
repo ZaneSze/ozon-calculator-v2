@@ -1025,6 +1025,14 @@ export function calculateMultiItemProfit(
   const revenue = priceRMB * normalizedItemCount;
   const profitMargin = revenue > 0 ? (totalProfit / revenue) * 100 : 0;
 
+  // 🔹 税务模拟（仅影响税后口径）
+  const taxes = calculateTaxSimulation(input, profitPerItem);
+  if (taxes.enabled) {
+    const afterTaxPerItem = taxes.afterTaxNetProfit;
+    const afterTaxTotal = afterTaxPerItem * normalizedItemCount;
+    return { profitPerItem: afterTaxPerItem, totalProfit: afterTaxTotal, profitMargin: revenue > 0 ? (afterTaxTotal / revenue) * 100 : 0 };
+  }
+
   return { profitPerItem, totalProfit, profitMargin };
 }
 
@@ -1683,10 +1691,17 @@ export function performFullCalculation(
 
   const taxes = calculateTaxSimulation(input, netProfit);
 
+  // 🔹 税后口径：启用税务模拟时，主指标切换为税后
+  const effectiveNetProfit = taxes.enabled ? taxes.afterTaxNetProfit : netProfit;
+  const taxAmount = taxes.enabled ? taxes.vatPayable + taxes.corporateTax : 0;
+  const effectiveTotalCost = totalCost + taxAmount;
+  const effectiveRoi = taxes.enabled && effectiveTotalCost > 0 ? (effectiveNetProfit / effectiveTotalCost) * 100 : roi;
+  const effectiveProfitMargin = taxes.enabled && priceRMB > 0 ? (effectiveNetProfit / priceRMB) * 100 : profitMargin;
+
   return {
-    netProfit,
-    roi,
-    profitMargin,
+    netProfit: effectiveNetProfit,
+    roi: effectiveRoi,
+    profitMargin: effectiveProfitMargin,
     commissionRate,
     costs: {
       purchase: purchaseCost,
@@ -1701,7 +1716,7 @@ export function performFullCalculation(
       paymentFee: paymentFeeAmount,
       starPlanFee: starPlanFeeAmount,
       ozonPremiumFee: ozonPremiumFeeAmount,
-      total: totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + starPlanFeeAmount + ozonPremiumFeeAmount + cpaCost,
+      total: totalFixedCost + commissionAmount + withdrawalFeeAmount + paymentFeeAmount + starPlanFeeAmount + ozonPremiumFeeAmount + cpaCost + taxAmount,
     },
     taxes,
     pricingStrategies,
