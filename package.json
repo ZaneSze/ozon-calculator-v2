@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "test": "node scripts/verify-parsers.js",
+    "test": "node scripts/verify-parsers.js && node scripts/verify-ogl.js",
     "start": "next start"
   },
   "dependencies": {

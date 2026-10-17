@@ -40,6 +40,7 @@ import { getCommissionRate, getCommissionTiersForMode, calculateMarginalContribu
 import { cnyToRub, getRiskAdjustedRevenueRMB, getRiskAdjustedRubPerCny, rubToCny } from "@/lib/currency";
 import { calculateOzonBackendPricing } from "@/lib/ozon-pricing";
 import { isProfitMarginBelowThreshold } from "@/lib/profit-threshold";
+import { calculateOglServiceFee } from "@/lib/ogl";
 import { WeightWithKg } from "@/components/weight-with-kg";
 import {
   PieChart,
@@ -199,6 +200,7 @@ export function Dashboard({
       result.costs.paymentFee -
       (result.costs.starPlanFee || 0) -
       (result.costs.ozonPremiumFee || 0) -
+      (result.costs.oglServiceFee || 0) -
       result.costs.cpaCost -
       (cpcSalesPercent > 0 ? result.costs.cpcCost : 0);
 
@@ -234,10 +236,11 @@ export function Dashboard({
       (input.ozonPremiumEnabled ? input.ozonPremiumRate || 2.5 : 0)
     );
     const marginAfterSalesCpc = baseM - Math.max(0, exchangeScenarioBase.cpcSalesPercent || 0) / 100;
+    const scenarioFixedCost = exchangeScenarioBase.fixedCost + calculateOglServiceFee(result.recommendedShipping, priceRMB, nextExchangeRate);
     const profit =
       marginAfterSalesCpc > 0
-        ? calculateNetProfit(priceRMB, marginAfterSalesCpc, exchangeScenarioBase.fixedCost)
-        : -exchangeScenarioBase.fixedCost;
+        ? calculateNetProfit(priceRMB, marginAfterSalesCpc, scenarioFixedCost)
+        : -scenarioFixedCost;
 
     return { worsenPercent, exchangeRate: nextExchangeRate, priceRMB, profit, commissionRate };
   }, [
@@ -251,6 +254,7 @@ export function Dashboard({
     input.starPlanEnabled,
     input.starPlanRate,
     input.withdrawalFee,
+    result.recommendedShipping,
     result.commissionRate,
     result.netProfit,
   ]);
@@ -276,6 +280,7 @@ export function Dashboard({
     const data = [
       { name: "采购+头程+包装", value: result.costs.purchase + result.costs.domesticShipping + result.costs.packaging },
       { name: "跨境运费", value: result.costs.internationalShipping },
+      { name: "OGL电子服务费", value: result.costs.oglServiceFee || 0 },
       { name: "平台佣金", value: result.costs.commission },
       { name: "提现手续费", value: result.costs.withdrawalFee },
       { name: "支付手续费", value: result.costs.paymentFee },
@@ -568,7 +573,8 @@ export function Dashboard({
   const costSegments = useMemo(() => {
     const baseItems = [
       { label: "采购成本", value: result.costs.purchase + result.costs.domesticShipping + result.costs.packaging, color: "#5B5CF6" },
-      { label: "物流费用", value: result.costs.internationalShipping, color: "#F59E0B" },
+      { label: "物流运输费", value: result.costs.internationalShipping, color: "#F59E0B" },
+      { label: "OGL电子服务费", value: result.costs.oglServiceFee || 0, color: "#2563EB" },
       { label: "平台佣金", value: result.costs.commission, color: "#10B981" },
       { label: "支付手续费", value: result.costs.paymentFee, color: "#8B5CF6" },
       { label: "星星计划", value: result.costs.starPlanFee || 0, color: "#EC4899" },

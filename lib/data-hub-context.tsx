@@ -26,7 +26,9 @@ import {
   selectCommissionSheetName,
 } from "./commission-parsing";
 import { normalizeOzonRating, parseAlternativeShippingRows } from "./shipping-alternative-parsing";
-import { isSkippableShippingRow, selectShippingSheetName } from "./shipping-workbook";
+import { getLogisticsMode, isOglSheet, parseOglRows, mergeShippingImport } from "./ogl";
+import { DEFAULT_OGL_DATA } from "./ogl-default-data";
+import { isSkippableShippingRow, selectShippingSheets } from "./shipping-workbook";
 import { parseEuropeanNumber } from "./number-parsing";
 import {
   clearImportedDataset,
@@ -256,7 +258,8 @@ interface DataHubContextType {
     valueLimitCurrency?: ValueLimitCurrency,
     hasBattery?: boolean,
     hasLiquid?: boolean,
-    designatedProvider?: string
+    designatedProvider?: string,
+    logisticsMode?: "thirdParty" | "OGL"
   ) => { available: ShippingChannel[]; unavailable: UnavailableShippingChannel[] };
 }
 
@@ -500,7 +503,7 @@ function parseDeliveryTime(timeStr: string): { min: number; max: number } {
 export function DataHubProvider({ children }: { children: React.ReactNode }) {
   const DATA_VERSION = "v2.5";
   const [commissionData, setCommissionData] = useState<CategoryCommission[]>(DEFAULT_COMMISSION_DATA);
-  const [shippingData, setShippingData] = useState<ShippingChannel[]>(DEFAULT_SHIPPING_DATA);
+  const [shippingData, setShippingData] = useState<ShippingChannel[]>([...DEFAULT_SHIPPING_DATA, ...DEFAULT_OGL_DATA]);
   const [commissionLoaded, setCommissionLoaded] = useState(true);
   const [shippingLoaded, setShippingLoaded] = useState(true);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
@@ -538,7 +541,7 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
 
     const normalizeShippingForRestore = (items: ShippingChannel[]) => {
       const seen = new Map<string, number>();
-      return items.map((item, index) => {
+      const restored = items.map((item, index) => {
         const baseId = item.id || generateShippingUniqueId(item.name || `channel-${index}`, item.serviceLevel || "");
         const count = seen.get(baseId) || 0;
         seen.set(baseId, count + 1);
@@ -548,6 +551,7 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
           volumetricDivisor: item.volumetricDivisor !== undefined && item.volumetricDivisor > 0 && item.volumetricDivisor < 1000 ? 12000 : item.volumetricDivisor,
         };
       });
+      return restored.some(channel => getLogisticsMode(channel) === "OGL") ? restored : [...restored, ...DEFAULT_OGL_DATA];
     };
 
     const restore = async () => {
@@ -821,6 +825,8 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
         type: "shipping",
         rows: rawRows.length,
         channels: finalData.length,
+        shippingModes: [...new Set(finalData.map(getLogisticsMode))],
+        shippingSheets: [...new Set(finalData.map(channel => channel.sourceSheet).filter((name): name is string => Boolean(name)))],
         valueRMBMapped: finalData.filter((ch) => ch.minValue !== undefined || ch.maxValue !== undefined).length,
         valueRUBMapped: finalData.filter((ch) => ch.minValueRUB !== undefined || ch.maxValueRUB !== undefined).length,
         deliveryTimeMapped: finalData.filter((ch) => ch.deliveryTimeMin > 0 || ch.deliveryTimeMax > 0).length,
@@ -828,6 +834,7 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
       });
 
       const parseShippingRows = (rawRows: string[][], sheetName?: string): ShippingChannel[] => {
+        if (isOglSheet(rawRows, sheetName)) return parseOglRows(rawRows, sheetName);
         // 智能寻找真实表头行
         const headerIdx = findShippingHeaderRow(rawRows);
 
@@ -863,6 +870,7 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
           volumetricDivisor: colMap['volumetricDivisor'] ?? -1,
         };
 
+        if (fieldMapping.rate < 0) throw new Error("第三方物流表缺少费率列，请检查列映射；原有数据未修改");
         const parsed: ShippingChannel[] = [];
         const idCounter = new Map<string, number>(); // 跟踪ID出现次数
         let idx = 0;
@@ -912,6 +920,8 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
 
             idx++;
             parsed.push({
+              logisticsMode: "thirdParty",
+              sourceSheet: sheetName,
               id: uniqueId, // 使用唯一标识符
               name,
               thirdParty: fieldMapping.thirdParty >= 0 ? row[fieldMapping.thirdParty]?.trim() || "" : "",
@@ -945,6 +955,7 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        if (parsed.some(channel => channel.fixFee + channel.varFeePerGram <= 0)) throw new Error("存在无法识别的物流费率，未更新现有数据，请检查费率列");
         return parsed;
       };
 
@@ -963,32 +974,23 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
             const data = new Uint8Array(e.target?.result as ArrayBuffer);
             const workbook = XLSX.read(data, { type: "array" });
 
-            const sheetName = selectShippingSheetName(workbook.SheetNames);
-            if (!sheetName) {
-              throw new Error("未找到可解析的物流工作表");
-            }
-
-            const worksheet = workbook.Sheets[sheetName];
-            const rawRows = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1, defval: "", raw: false });
-
-            const parsed = parseShippingRows(rawRows, sheetName);
-
-            // 根据 mode 处理数据
-            let finalData: ShippingChannel[];
-            if (mode === "overwrite") {
-              finalData = parsed;
-            } else {
-              // merge 模式：根据 uniqueId 合并
-              const existingMap = new Map(shippingData.map(ch => [ch.id, ch]));
-              parsed.forEach(ch => {
-                existingMap.set(ch.id, ch); // 覆盖或新增
-              });
-              finalData = Array.from(existingMap.values());
-            }
+            const sheets = selectShippingSheets(workbook.SheetNames.map(name => ({
+              name,
+              rows: XLSX.utils.sheet_to_json<string[]>(workbook.Sheets[name], { header: 1, defval: "", raw: false }),
+            })));
+            if (!sheets.length) throw new Error("未找到可解析的物流工作表");
+            const rawRows: string[][] = [];
+            const parsed = sheets.flatMap(({ name: sheetName, rows }) => {
+              rawRows.push(...rows);
+              const channels = parseShippingRows(rows, sheetName);
+              if (!channels.length) throw new Error(`${sheetName}未识别到有效渠道，原有数据未修改`);
+              return channels;
+            });
+            const finalData = mergeShippingImport(shippingData, parsed, mode);
 
             setShippingData(finalData);
             setShippingLoaded(true);
-            const summary = makeShippingSummary(rawRows, finalData);
+            const summary = makeShippingSummary(rawRows, parsed);
             const persistenceWarning = await persistImportedData("shipping", finalData, summary, file.name);
             if (persistenceWarning) {
               summary.warnings = [...(summary.warnings || []), persistenceWarning];
@@ -1010,22 +1012,11 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
               const rawRows = results.data as string[][];
               const parsed = parseShippingRows(rawRows);
 
-              // 根据 mode 处理数据
-              let finalData: ShippingChannel[];
-              if (mode === "overwrite") {
-                finalData = parsed;
-              } else {
-                // merge 模式：根据 uniqueId 合并
-                const existingMap = new Map(shippingData.map(ch => [ch.id, ch]));
-                parsed.forEach(ch => {
-                  existingMap.set(ch.id, ch); // 覆盖或新增
-                });
-                finalData = Array.from(existingMap.values());
-              }
+              const finalData = mergeShippingImport(shippingData, parsed, mode);
 
               setShippingData(finalData);
               setShippingLoaded(true);
-              const summary = makeShippingSummary(rawRows, finalData);
+              const summary = makeShippingSummary(rawRows, parsed);
               const persistenceWarning = await persistImportedData("shipping", finalData, summary, file.name);
               if (persistenceWarning) {
                 summary.warnings = [...(summary.warnings || []), persistenceWarning];
@@ -1153,7 +1144,8 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
       valueLimitCurrency: ValueLimitCurrency = "RMB",
       hasBattery: boolean = false, // 🔹 是否带电
       hasLiquid: boolean = false, // 🔹 是否带液体
-      designatedProvider: string = "" // 🔹 指定物流商过滤
+      designatedProvider: string = "", // 指定物流商过滤
+      logisticsMode: "thirdParty" | "OGL" = "thirdParty"
     ) => {
       const priceRUB = cnyToRub(priceRMB, rubPerCny);
       
@@ -1166,7 +1158,7 @@ export function DataHubProvider({ children }: { children: React.ReactNode }) {
       const available: ShippingChannel[] = [];
       const unavailable: UnavailableShippingChannel[] = [];
 
-      shippingData.forEach((channel) => {
+      shippingData.filter(channel => getLogisticsMode(channel) === logisticsMode).forEach((channel) => {
         const reasons: string[] = [];
         const interceptionReasons: ShippingInterceptionReason[] = [];
         

@@ -1,6 +1,7 @@
 import type { ValueLimitCurrency } from "./currency";
 
 export type FulfillmentMode = "RFBS" | "FBP";
+export type LogisticsMode = "thirdParty" | "OGL";
 
 // 佣金阶梯定义
 export interface CommissionTier {
@@ -31,6 +32,8 @@ export interface CategoryCommission {
 
 // 物流渠道定义
 export interface ShippingChannel {
+  logisticsMode?: LogisticsMode;   // 旧数据未标记时按第三方物流处理
+  sourceSheet?: string;
   id: string;
   name: string;                    // 配送方式名称
   thirdParty: string;              // 第三方物流 (RETS, ZTO, GUOO, etc.)
@@ -76,6 +79,7 @@ export interface UnavailableShippingChannel extends ShippingChannel {
 
 // 输入参数
 export interface CalculationInput {
+  logisticsMode?: LogisticsMode;
   // 商品参数
   primaryCategory: string;
   secondaryCategory: string;
@@ -148,6 +152,7 @@ export interface CalculationResult {
     domesticShipping: number;
     packaging: number;
     internationalShipping: number;
+    oglServiceFee?: number; // OGL物流平台电子服务费，人民币
     commission: number;
     cpaCost: number;
     cpcCost: number;
@@ -228,6 +233,8 @@ export interface ImportSummary {
   type: "commission" | "shipping";
   rows: number;
   channels?: number;
+  shippingModes?: LogisticsMode[];
+  shippingSheets?: string[];
   categories?: number;
   commissionTierMapped?: number;
   commissionSheetName?: string;

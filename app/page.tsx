@@ -55,11 +55,13 @@ import { calculateOzonBackendPricing } from "@/lib/ozon-pricing";
 import { isProfitMarginBelowThreshold } from "@/lib/profit-threshold";
 import { formatWeightWithKg } from "@/lib/weight-format";
 import { WeightWithKg } from "@/components/weight-with-kg";
-import { selectShippingSheetName } from "@/lib/shipping-workbook";
+import { getLogisticsMode, OGL_SOURCE_URL, OGL_RATE_DATE } from "@/lib/ogl";
+import { selectShippingSheets } from "@/lib/shipping-workbook";
 import { selectCommissionSheetName } from "@/lib/commission-parsing";
 
 // 默认输入：售价为 RMB（1500 RUB ÷ 12 = 125 RMB）
 const DEFAULT_INPUT: CalculationInput = {
+  logisticsMode: "thirdParty",
   primaryCategory: "电子产品",
   secondaryCategory: "电子产品配饰",
   tertiaryCategory: "",
@@ -211,7 +213,7 @@ async function readTabularFileAsCsv(file: File, type?: "commission" | "shipping"
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
     const sheetName = type === "shipping"
-      ? selectShippingSheetName(workbook.SheetNames)
+      ? selectShippingSheets(workbook.SheetNames.map(name => ({ name, rows: XLSX.utils.sheet_to_json<string[]>(workbook.Sheets[name], { header: 1, defval: "", raw: false }) })))[0]?.name
       : type === "commission"
         ? selectCommissionSheetName(workbook.SheetNames)
         : workbook.SheetNames[0];
@@ -549,6 +551,7 @@ export default function Home() {
           ozonPremiumEnabled: parsedData.ozonPremiumEnabled || false,
           ozonPremiumRate: parsedData.ozonPremiumRate ?? 2.5,
           valueLimitCurrency: parsedData.valueLimitCurrency || "RMB",
+          logisticsMode: parsedData.logisticsMode === "OGL" ? "OGL" : "thirdParty",
           fulfillmentMode: parsedData.fulfillmentMode || "RFBS",
           tertiaryCategory: parsedData.tertiaryCategory || "",
         });
@@ -645,15 +648,16 @@ export default function Home() {
       input.valueLimitCurrency,
       input.hasBattery, // 🔹 传入是否带电
       input.hasLiquid, // 🔹 传入是否带液体
-      providerStr // 🔹 使用物流商筛选
+      providerStr,
+      input.logisticsMode || "thirdParty"
     );
-  }, [input.length, input.width, input.height, input.weight, effectiveTargetPriceRMB, effectiveRubPerCny, input.valueLimitCurrency, input.hasBattery, input.hasLiquid, providers, getShippingChannels]);
+  }, [input.length, input.width, input.height, input.weight, effectiveTargetPriceRMB, effectiveRubPerCny, input.valueLimitCurrency, input.hasBattery, input.hasLiquid, input.logisticsMode, providers, getShippingChannels]);
   
   // 🔹 应用收藏夹筛选
   const shippingChannels = useMemo(() => {
     if (isFavoritesFilter) {
       // 收藏夹：合并所有渠道后显示
-      const allFavorites = shippingData.filter(ch => favoriteChannels.includes(ch.id));
+      const allFavorites = baseShippingChannels.available.filter(ch => favoriteChannels.includes(ch.id));
       return {
         available: allFavorites,
         unavailable: [],
@@ -748,7 +752,7 @@ export default function Home() {
     
     // 防止在同一渲染周期内重复触发
     if (lockedMarginRef.current === lockedMargin) {
-      const reverseResult = reversePriceFromMargin(lockedMargin, effectiveInput, commission, selectedChannel || undefined);
+      const reverseResult = reversePriceFromMargin(lockedMargin, effectiveInput, commission, selectedChannel || undefined, shippingData);
       
       if (reverseResult.error) {
         setMarginError(reverseResult.error);
@@ -784,6 +788,7 @@ export default function Home() {
     lockedMargin,
     commission,
     selectedChannel,
+    shippingData,
     toDisplayPriceRMB,
   ]);
   
@@ -800,8 +805,8 @@ export default function Home() {
   // 计算六档定价推荐矩阵（使用实际汇率）
   const sixTierPricing = useMemo(() => {
     if (!commission) return [];
-    return calculateSixTierPricing(effectiveInput, commission, selectedChannel || undefined);
-  }, [effectiveInput, commission, selectedChannel]);
+    return calculateSixTierPricing(effectiveInput, commission, selectedChannel || undefined, shippingData);
+  }, [effectiveInput, commission, selectedChannel, shippingData]);
 
   const displaySixTierPricing = useMemo(() => {
     return sixTierPricing.map((tier) => {
@@ -868,7 +873,7 @@ export default function Home() {
       priceRangeRMB.push(parseFloat(p.toFixed(2)));
     }
     const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent, platformProgramRate } = totalFixedCostData;
-    return calculateProfitCurve(priceRangeRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, platformProgramRate, effectiveInput.fulfillmentMode || "RFBS")
+    return calculateProfitCurve(priceRangeRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, platformProgramRate, effectiveInput.fulfillmentMode || "RFBS", selectedChannel || undefined)
       .map((point) => {
         const displayPriceRMB = toDisplayPriceRMB(point.priceRMB);
         return {
@@ -877,14 +882,14 @@ export default function Home() {
           priceRUB: cnyToRub(displayPriceRMB, input.exchangeRate),
         };
       });
-  }, [commission, effectiveInput, input.exchangeRate, toDisplayPriceRMB, totalFixedCostData]);
+  }, [commission, effectiveInput, input.exchangeRate, toDisplayPriceRMB, totalFixedCostData, selectedChannel]);
 
   // 汇率抗压测试
   const stressTest = useMemo(() => {
     if (!commission) return { at5PercentDrop: 0, at10PercentDrop: 0, zeroProfitRate: 0 };
     const { fixedCostForVariablePricing, cpaRateForM, variableCpcSalesPercent, platformProgramRate } = totalFixedCostData;
-    return calculateExchangeRateStressTest(effectiveInput.targetPriceRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, platformProgramRate, effectiveInput.fulfillmentMode || "RFBS");
-  }, [commission, effectiveInput, totalFixedCostData]);
+    return calculateExchangeRateStressTest(effectiveInput.targetPriceRMB, effectiveInput.exchangeRate, commission, effectiveInput.withdrawalFee, cpaRateForM, fixedCostForVariablePricing, effectiveInput.paymentFee, variableCpcSalesPercent, platformProgramRate, effectiveInput.fulfillmentMode || "RFBS", selectedChannel || undefined);
+  }, [commission, effectiveInput, totalFixedCostData, selectedChannel]);
 
   // 多件装利润
   const multiItemProfit = useMemo(() => {
@@ -900,7 +905,7 @@ export default function Home() {
   const handleReversePriceFromMargin = useCallback((targetMargin: number) => {
     if (!commission) return;
     
-    const result = reversePriceFromMargin(targetMargin, effectiveInput, commission, selectedChannel || undefined);
+    const result = reversePriceFromMargin(targetMargin, effectiveInput, commission, selectedChannel || undefined, shippingData);
     
     if (result.error) {
       setMarginError(result.error);
@@ -908,7 +913,7 @@ export default function Home() {
       setMarginError(null);
       setInput((prev) => ({ ...prev, targetPriceRMB: toDisplayPriceRMB(result.priceRMB) }));
     }
-  }, [effectiveInput, commission, selectedChannel, toDisplayPriceRMB]);
+  }, [effectiveInput, commission, selectedChannel, shippingData, toDisplayPriceRMB]);
 
   // 清除售价时清除利润率错误
   const handleInputChange = useCallback((newInput: CalculationInput) => {
@@ -1051,6 +1056,12 @@ export default function Home() {
     try {
       // 读取文件并解析
       const { csvContent, sheetName } = await readTabularFileAsCsv(file, "shipping");
+      if (/\bOGL\b/i.test(`${sheetName || ""} ${csvContent.slice(0, 8000)}`) || /发运方法|Handling Type/i.test(csvContent)) {
+        const summary = await loadShippingData(file, "overwrite");
+        setUploadToast({ message: appendImportWarning(`已识别OGL/混合物流表：导入${summary.channels || 0}条，按物流类型更新，其他类型保留`, summary), type: "success" });
+        e.target.value = "";
+        return;
+      }
       const parsed = smartParseCSV(csvContent, "shipping");
       setParsedCsvData(parsed);
       setMappingDataType("shipping");
@@ -1068,6 +1079,8 @@ export default function Home() {
         console.error("上传物流表失败:", loadErr);
         setUploadToast({ message: `❌ 物流表导入失败: ${loadErr instanceof Error ? loadErr.message : '未知错误'}`, type: 'error' });
       }
+    } finally {
+      e.target.value = "";
     }
   }, [appendImportWarning, loadShippingData]);
 
@@ -1134,9 +1147,10 @@ export default function Home() {
           rowInput.valueLimitCurrency,
           rowInput.hasBattery,
           rowInput.hasLiquid,
-          providerStr
+          providerStr,
+          rowInput.logisticsMode || "thirdParty"
         );
-        const selected = rowChannels.available[0] || null;
+        const selected = [...rowChannels.available].sort((a, b) => calculateShippingCost(a, rowInput.weight, rowInput.length, rowInput.width, rowInput.height, rowInput.weight) - calculateShippingCost(b, rowInput.weight, rowInput.length, rowInput.width, rowInput.height, rowInput.weight))[0] || null;
         if (!selected) {
           const suggestedPrice = calculateSuggestedPrice(rowChannels.unavailable, effectiveRubPerCny, rowInput.valueLimitCurrency, rowInput, rowCommission, 20);
           const displaySuggestedPriceRMB = suggestedPrice.suggestedPriceRMB
@@ -1260,6 +1274,8 @@ export default function Home() {
         ["成本", "星星计划", (result.costs.starPlanFee || 0).toFixed(2), input.starPlanEnabled ? `${input.starPlanRate || 1.5}%` : "关闭"],
         ["成本", "Ozon Premium", (result.costs.ozonPremiumFee || 0).toFixed(2), input.ozonPremiumEnabled ? `${input.ozonPremiumRate || 2.5}%` : "关闭"],
         ["物流", "选中渠道", selectedChannel ? `${selectedChannel.thirdParty}-${selectedChannel.name}` : "无", ""],
+        ["物流", "类型", input.logisticsMode === "OGL" ? "官方OGL物流" : "第三方物流", ""],
+        ["物流", "OGL电子服务费", result.costs.oglServiceFee || 0, "RMB，已计入总成本"],
         ["物流", "计费重", formatWeightWithKg(result.chargeableWeight), "计算单位仍为 g"],
         ["风险", "警告", result.warnings.join(" | "), ""],
         ["建议", "首要建议", firstSuggestion, ""],
@@ -1894,7 +1910,7 @@ export default function Home() {
                 </label>
                 <label className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
                   <Truck className="h-3 w-3 text-green-600" />
-                  <span>导入物流表</span>
+                  <span>导入物流表（第三方 / OGL）</span>
                   <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleShippingFileUpload} />
                 </label>
                 <label className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
@@ -1920,7 +1936,8 @@ export default function Home() {
                 </div>
                 <div className="px-3 py-2 border-t border-b text-xs font-medium text-slate-600">模板</div>
                 <button onClick={downloadCommissionTemplate} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">佣金表模板</button>
-                <button onClick={downloadShippingTemplate} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">物流表模板</button>
+                <button onClick={downloadShippingTemplate} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">第三方物流表模板</button>
+                <a href="/data/OGL_2026-08-24.xlsx" download className="block w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50">OGL官方费率表（2026-08-24）</a>
                 <button onClick={downloadBatchTemplate} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">批量计算模板</button>
                 <div className="px-3 py-2 border-t text-xs font-medium text-slate-600">配置</div>
                 <button onClick={() => exportConfig()} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">导出配置</button>
@@ -2242,6 +2259,23 @@ export default function Home() {
                   可用 {shippingChannels.available.length} / 总计 {shippingChannels.available.length + shippingChannels.unavailable.length}
                 </span>
               </div>
+              <div role="group" aria-label="物流类型" className="mb-2 grid grid-cols-2 gap-2">
+                {([{ value: "thirdParty", label: "第三方物流" }, { value: "OGL", label: "官方 OGL 物流" }] as const).map(mode => (
+                  <Button key={mode.value} type="button" variant="segmented" className="min-h-11 px-2 text-xs"
+                    data-active={(input.logisticsMode || "thirdParty") === mode.value}
+                    aria-pressed={(input.logisticsMode || "thirdParty") === mode.value}
+                    onClick={() => { setSelectedChannelId(null); handleInputChange({ ...input, logisticsMode: mode.value, designatedProviders: [] }); }}>
+                    {mode.label}
+                  </Button>
+                ))}
+              </div>
+              {input.logisticsMode === "OGL" && (
+                <div className="mb-2 rounded border border-blue-100 bg-blue-50 p-2 text-xs leading-5 text-blue-900">
+                  <p>费用 = 运输费（固定费 + 每克运费）+ 电子服务费（货值2%，每票15–200卢布）。Big / Premium Big计抛，其余按实重。</p>
+                  <p>内置费率生效日：{OGL_RATE_DATE}。可上传新表更新；服务可用性以卖家账户为准。</p>
+                  <a href={OGL_SOURCE_URL} target="_blank" rel="noreferrer" className="underline">官方费用规则</a>
+                </div>
+              )}
               {/* 物流多选筛选 */}
               <div className="flex w-full flex-wrap gap-0.5 sm:gap-1">
                 <Button
@@ -2272,7 +2306,7 @@ export default function Home() {
                     收藏
                   </Button>
                 )}
-                {[...new Set(shippingData.map(ch => ch.thirdParty).filter(Boolean))].sort().map(provider => (
+                {[...new Set(shippingData.filter(ch => getLogisticsMode(ch) === (input.logisticsMode || "thirdParty")).map(ch => ch.thirdParty).filter(Boolean))].sort().map(provider => (
                   <Button
                     key={provider}
                     type="button"
@@ -2343,7 +2377,7 @@ export default function Home() {
                       <span className="truncate">{selectedChannel.thirdParty || "Ozon"} / {selectedChannel.name}</span>
                     </div>
                     <div className="mt-1 truncate text-white/85">
-                      费用 ¥{(channelCosts.get(selectedChannel.id) ?? 0).toFixed(2)}
+                      物流总费 ¥{((channelCosts.get(selectedChannel.id) ?? 0) + (result.costs.oglServiceFee || 0)).toFixed(2)}
                       <span className="mx-1">·</span>
                       {selectedBillingInfo?.isVolumetric ? (
                         <span className="inline-flex items-center gap-1">

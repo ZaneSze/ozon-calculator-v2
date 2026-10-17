@@ -3,6 +3,8 @@
 import { Battery, CheckCircle2, Droplets, Ruler, Scale, Star, Timer } from "lucide-react";
 import { ShippingChannel, CalculationInput } from "@/lib/types";
 import { CalculationTrace } from "./mapping-debug-panel";
+import { calculateOglServiceFee, getLogisticsMode } from "@/lib/ogl";
+import { getRiskAdjustedRevenueRMB, getRiskAdjustedRubPerCny } from "@/lib/currency";
 import { WeightWithKg } from "@/components/weight-with-kg";
 
 interface LogisticsCardProps {
@@ -23,8 +25,8 @@ interface LogisticsCardProps {
 
 // 格式化函数
 const fDim = (v: number | undefined | null): string => {
-  if (v === undefined || v === null || v === Infinity) return '无限制';
-  return `≤${v}`;
+  if (v === undefined || v === null || v === Infinity || v >= 999999) return '未设限制';
+  return `≤${v}cm`;
 };
 
 const fWeightLimit = (min: number | undefined | null, max: number | undefined | null) => {
@@ -61,8 +63,10 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
   const varFeePerGram = channel.varFeePerGram;
   
   // 从 billing 获取计费数据
+  const isOgl = getLogisticsMode(channel) === "OGL";
+  const serviceFee = calculateOglServiceFee(channel, getRiskAdjustedRevenueRMB(input.targetPriceRMB, input.exchangeRateBuffer), getRiskAdjustedRubPerCny(input.exchangeRate, input.exchangeRateBuffer));
   const freightData = {
-    total: cost,
+    total: cost + serviceFee,
     original: cost * 1.1, // 模拟原价
     billingWeight: billing?.billingWeight || 0,
     formula: billing 
@@ -70,7 +74,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
         <span className="inline-flex flex-wrap items-center gap-1">
           <span>¥{channel.fixFee.toFixed(2)} + (</span>
           <WeightWithKg weightG={billing.billingWeight} />
-          <span>× ¥{varFeePerGram.toFixed(4)}/g)</span>
+          <span>× ¥{varFeePerGram.toFixed(4)}/g){isOgl ? ` + 电子服务费 ¥${serviceFee.toFixed(2)}` : ""}</span>
         </span>
       )
       : '计算中...'
@@ -123,7 +127,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           )}
           <span className="inline-flex items-center gap-1 rounded bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
             <Timer className="h-3 w-3" />
-            {channel.deliveryTimeMin || 15}-{channel.deliveryTimeMax || 30} 天
+            {channel.deliveryTimeMin > 0 ? `${channel.deliveryTimeMin}-${channel.deliveryTimeMax} 天` : "时效未提供"}
           </span>
           {showVolumetricLabel && isAvailable && (
             <span className="rounded bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
@@ -175,6 +179,9 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
         </div>
       </div>
 
+      {isOgl && <div className="mb-2 rounded bg-blue-50 px-2 py-1 text-xs text-blue-900">
+        运输费 ¥{cost.toFixed(2)} + 电子服务费 ¥{serviceFee.toFixed(2)}
+      </div>}
       {/* 3. 特货属性横条 - 醒目对比 */}
       <div className="mb-1.5 grid grid-cols-2 gap-1 pl-1">
         <div className={`flex items-center justify-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold ${
@@ -201,10 +208,10 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           <Scale className="h-3 w-3 opacity-70" /> <b className="text-foreground">{fWeightLimit(limits.minWt, limits.maxWt)}</b>
         </div>
         <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Ruler className="h-3 w-3 opacity-70" /> <b className="text-foreground">边{fDim(limits.maxSide)}cm</b>
+          <Ruler className="h-3 w-3 opacity-70" /> <b className="text-foreground">边{fDim(limits.maxSide)}</b>
         </div>
         <div className="text-[11px] text-muted-foreground">
-          <span className="opacity-70">三边和:</span> <b className="text-foreground">{fDim(limits.maxSum)}cm</b>
+          <span className="opacity-70">三边和:</span> <b className="text-foreground">{fDim(limits.maxSum)}</b>
         </div>
         <div className="text-[11px] text-muted-foreground">
           <span className="opacity-70">货值:</span>{" "}

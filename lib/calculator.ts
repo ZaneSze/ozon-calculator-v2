@@ -25,6 +25,55 @@ import { CalculationInput, CalculationResult, CategoryCommission, CommissionTier
 import { calculateShippingCost, parseBillingWeight } from "./data-hub-context";
 import { cnyToRub, rubToCny } from "./currency";
 import { formatWeightWithKg } from "./weight-format";
+import { calculateOglServiceFee, getLogisticsMode } from "./ogl";
+
+// OGL电子服务费含保底、比例、封顶三个区间，分别与佣金区间求交后反推售价。
+function reverseOglPrice(targetMargin: number, input: CalculationInput, commission: CategoryCommission, channel: ShippingChannel, enforceValueLimits = false): { priceRMB: number; commissionRate: number; error?: string } {
+  const rate = input.exchangeRate;
+  if (!(rate > 0)) return { priceRMB: 0, commissionRate: 0, error: "OGL需要有效汇率" };
+  const weight = getChargeableWeight(input.length, input.width, input.height, input.weight, channel).chargeable;
+  const transport = calculateShippingCost(channel, weight);
+  const returns = calculateReturnCost(input.returnHandling, input.returnRate, input.purchaseCost, input.domesticShipping, transport);
+  const variableCpc = input.cpcEnabled && input.cpcBillingMode === "salesPercent" ? normalizePercent(input.cpcSalesPercent) / 100 : 0;
+  const fixedCpc = variableCpc > 0 ? 0 : calculateInputCpcCost(input, 0);
+  const fixed = normalizeMoney(input.purchaseCost) + normalizeMoney(input.domesticShipping) + normalizeMoney(input.packagingFee) + transport + returns + fixedCpc;
+  const segments = [{ min: 0, max: 750 / rate, fixed: 15 / rate, percent: 0 }, { min: 750 / rate, max: 10000 / rate, fixed: 0, percent: 0.02 }, { min: 10000 / rate, max: Infinity, fixed: 200 / rate, percent: 0 }];
+  let best = Infinity;
+  let bestRate = 0;
+  for (const tier of getCommissionTiersForMode(commission, input.fulfillmentMode)) {
+    const margin = calculateMarginalContribution(tier.rate, input.withdrawalFee, input.cpaEnabled ? input.cpaRate : 0, input.paymentFee, getInputPlatformProgramRate(input));
+    for (const segment of segments) {
+      const denominator = margin - targetMargin / 100 - variableCpc - segment.percent;
+      if (denominator <= 0) continue;
+      const useRub = input.valueLimitCurrency === "RUB";
+      const valueMin = enforceValueLimits ? (useRub ? (channel.minValueRUB || 0) / rate : channel.minValue || 0) : 0;
+      const valueMax = enforceValueLimits ? (useRub ? (channel.maxValueRUB ?? Infinity) / rate : channel.maxValue ?? Infinity) : Infinity;
+      const lower = Math.max(normalizeTierMin(tier) / rate, segment.min, valueMin);
+      const upper = Math.min(normalizeTierMax(tier) / rate, segment.max, valueMax);
+      const price = Math.ceil((Math.max(lower, (fixed + segment.fixed) / denominator) - Number.EPSILON) * 100) / 100;
+      if (price > upper || price <= 0 || getCommissionRate(commission, cnyToRub(price, rate), input.fulfillmentMode) !== normalizePercent(tier.rate)) continue;
+      const profit = price * margin - fixed - price * variableCpc - calculateOglServiceFee(channel, price, rate);
+      if (profit + 0.000001 < price * targetMargin / 100) continue;
+      if (price < best) { best = price; bestRate = normalizePercent(tier.rate); }
+    }
+  }
+  return Number.isFinite(best) ? { priceRMB: best, commissionRate: bestRate } : { priceRMB: 0, commissionRate: 0, error: "当前佣金和OGL费用下无法达到目标利润率" };
+}
+
+function reverseOglAcrossGroups(targetMargin: number, input: CalculationInput, commission: CategoryCommission, selected: ShippingChannel, channels?: ShippingChannel[]) {
+  if (!channels) return reverseOglPrice(targetMargin, input, commission, selected);
+  let best: { priceRMB: number; commissionRate: number; error?: string } = { priceRMB: 0, commissionRate: 0, error: "当前OGL发运方式没有满足目标利润率及货值区间的评分组" };
+  for (const channel of channels) {
+    if (getLogisticsMode(channel) !== "OGL" || channel.serviceLevel !== selected.serviceLevel) continue;
+    if (input.hasBattery && !channel.batteryAllowed || input.hasLiquid && !channel.liquidAllowed) continue;
+    const weight = getChargeableWeight(input.length, input.width, input.height, input.weight, channel).chargeable;
+    if (input.weight < channel.minWeight || input.weight > channel.maxWeight || weight > channel.maxWeight) continue;
+    if (detectShippingDimensionLimits(input.length, input.width, input.height, channel).some(limit => limit.current > limit.limit)) continue;
+    const solved = reverseOglPrice(targetMargin, input, commission, channel, true);
+    if (!solved.error && (best.error || solved.priceRMB < best.priceRMB)) best = solved;
+  }
+  return best;
+}
 
 function parseFiniteNumber(value: number, fallback: number): number {
   const parsed = parseFloat(String(value));
@@ -369,8 +418,10 @@ export function reversePriceFromMargin(
   targetMarginPercent: number,
   input: CalculationInput,
   commission: CategoryCommission,
-  shippingChannel: ShippingChannel | undefined
+  shippingChannel: ShippingChannel | undefined,
+  shippingChannels?: ShippingChannel[]
 ): { priceRMB: number; commissionRate: number; error?: string } {
+  if (shippingChannel && getLogisticsMode(shippingChannel) === "OGL") return reverseOglAcrossGroups(normalizeTargetMarginPercent(targetMarginPercent), input, commission, shippingChannel, shippingChannels);
   
   const safeTargetMarginPercent = normalizeTargetMarginPercent(targetMarginPercent);
   const T_m = safeTargetMarginPercent / 100;
@@ -514,7 +565,8 @@ export function validatePriceForTier(
 export function calculateSixTierPricing(
   input: CalculationInput,
   commission: CategoryCommission,
-  shippingChannel: ShippingChannel | undefined
+  shippingChannel: ShippingChannel | undefined,
+  shippingChannels?: ShippingChannel[]
 ): Array<{
   label: string;
   profitMargin: number;
@@ -563,6 +615,10 @@ export function calculateSixTierPricing(
       : 0;
 
   return anchors.map((anchor) => {
+    if (shippingChannel && getLogisticsMode(shippingChannel) === "OGL") {
+      const solved = reverseOglAcrossGroups(anchor.profitMargin, input, commission, shippingChannel, shippingChannels);
+      return { ...anchor, priceRMB: solved.priceRMB, priceRUB: cnyToRub(solved.priceRMB, exchangeRate), disabled: Boolean(solved.error), error: solved.error };
+    }
     const T_m = anchor.profitMargin / 100; // 转换为小数
     
     // 🔹 使用迭代算法求解
@@ -835,7 +891,8 @@ export function calculateExchangeRateStressTest(
   paymentFee: number = 0,
   cpcSalesPercent: number = 0,
   starPlanRate: number = 0,
-  fulfillmentMode: FulfillmentMode = "RFBS"
+  fulfillmentMode: FulfillmentMode = "RFBS",
+  shippingChannel?: ShippingChannel
 ): {
   at5PercentDrop: number;
   at10PercentDrop: number;
@@ -872,7 +929,7 @@ export function calculateExchangeRateStressTest(
     
     if (M <= 0) return -Infinity;
     // 🔹 口径：exchangeRate 越高，固定卢布售价折回人民币越少
-    return calculateNetProfit(newPriceRMB, M, fCost + newPriceRMB * cpcRate);
+    return calculateNetProfit(newPriceRMB, M, fCost + newPriceRMB * cpcRate + calculateOglServiceFee(shippingChannel, newPriceRMB, newExchangeRate));
   };
 
   // 回款汇率恶化 5%（1 CNY = N RUB 中的 N 上升 5%）
@@ -885,13 +942,14 @@ export function calculateExchangeRateStressTest(
   let zeroProfitRate = 0;
   
   // 🔹 计算当前利润
-  const currentProfit = currentM > 0 ? calculateNetProfit(pRMB, currentM, fCost + pRMB * cpcRate) : -fCost;
+  const currentProfit = currentM > 0 ? calculateNetProfit(pRMB, currentM, fCost + pRMB * cpcRate + calculateOglServiceFee(shippingChannel, pRMB, safeExchangeRate)) : -fCost;
   
   if (currentM > 0 && priceRUB > 0 && currentProfit > 0) {
     // 在当前佣金阶梯下的 0 利润汇率
     // 利润 = (P_rub / E) × M - F_total = 0
     // E = P_rub × M / F_total
-    zeroProfitRate = fCost > 0 && currentM > cpcRate ? (priceRUB * (currentM - cpcRate)) / fCost : 0;
+    const serviceFeeRUB = calculateOglServiceFee(shippingChannel, pRMB, safeExchangeRate) * safeExchangeRate;
+    zeroProfitRate = fCost > 0 && currentM > cpcRate ? (priceRUB * (currentM - cpcRate) - serviceFeeRUB) / fCost : 0;
     
     // 验证该汇率对应的佣金阶梯是否一致
     if (zeroProfitRate > 0) {
@@ -960,7 +1018,8 @@ export function calculateProfitCurve(
   paymentFee: number = 0,
   cpcSalesPercent: number = 0,
   starPlanRate: number = 0,
-  fulfillmentMode: FulfillmentMode = "RFBS"
+  fulfillmentMode: FulfillmentMode = "RFBS",
+  shippingChannel?: ShippingChannel
 ): { priceRMB: number; priceRUB: number; profit: number; commissionRate: number }[] {
   const safeExchangeRate = parseFiniteNumber(exchangeRate, 12) > 0 ? parseFiniteNumber(exchangeRate, 12) : 12;
   const safeWithdrawalFee = normalizeNonNegativePercent(withdrawalFee);
@@ -973,7 +1032,7 @@ export function calculateProfitCurve(
     const priceRUB = cnyToRub(priceRMB, safeExchangeRate);
     const rate = getCommissionRate(commission, priceRUB, fulfillmentMode);
     const M = calculateMarginalContribution(rate, safeWithdrawalFee, safeCpaRate, safePaymentFee, starPlanRate);
-    const dynamicCpcCost = priceRMB * cpcRate;
+    const dynamicCpcCost = priceRMB * cpcRate + calculateOglServiceFee(shippingChannel, priceRMB, safeExchangeRate);
     const profit = M > 0 ? calculateNetProfit(priceRMB, M, safeTotalFixedCost + dynamicCpcCost) : -(safeTotalFixedCost + dynamicCpcCost);
     return { priceRMB, priceRUB, profit, commissionRate: rate };
   });
@@ -1009,7 +1068,8 @@ export function calculateMultiItemProfit(
   const purchaseCost = normalizeMoney(input.purchaseCost);
   const domesticShipping = normalizeMoney(input.domesticShipping);
   const packagingFee = normalizeMoney(input.packagingFee);
-  const totalFixedCost = purchaseCost + domesticShipping + packagingFee + shippingPerItem + cpcCost + returnCost;
+  const oglServiceFee = calculateOglServiceFee(shippingChannel, priceRMB * normalizedItemCount, exchangeRate) / normalizedItemCount;
+  const totalFixedCost = purchaseCost + domesticShipping + packagingFee + shippingPerItem + cpcCost + returnCost + oglServiceFee;
 
   const priceRUB = cnyToRub(priceRMB, exchangeRate);
   const commissionRate = getCommissionRate(commission, priceRUB, input.fulfillmentMode || "RFBS");
@@ -1521,6 +1581,7 @@ export function performFullCalculation(
   const internationalShipping = shippingChannel
     ? calculateShippingCost(shippingChannel, chargeableWeight)
     : 0;
+  const oglServiceFee = calculateOglServiceFee(shippingChannel, priceRMB, input.exchangeRate);
 
   // 广告费 (RMB)
   const cpcCost = calculateInputCpcCost(input, priceRMB);
@@ -1547,6 +1608,7 @@ export function performFullCalculation(
     domesticShipping +
     packagingFee +
     internationalShipping +
+    oglServiceFee +
     cpcCost +
     returnCost;
 
@@ -1591,6 +1653,12 @@ export function performFullCalculation(
     platformProgramRate,
     fulfillmentMode
   );
+  if (shippingChannel && getLogisticsMode(shippingChannel) === "OGL") {
+    for (const [key, margin] of [["breakEven", 0], ["lowProfit", 10], ["mediumProfit", 20], ["highProfit", 30]] as const) {
+      pricingStrategies[key] = reverseOglPrice(margin, input, activeCommission, shippingChannel).priceRMB;
+    }
+    suggestions.push("OGL费用已包含运输费和物流平台电子服务费；取消、退货费用按当前退损假设预估，未另设统一官方逆向费率。");
+  }
 
   // 黑洞预警
   const blackHoleWarning = detectCommissionBlackHole(
@@ -1605,7 +1673,8 @@ export function performFullCalculation(
     platformProgramRate,
     fulfillmentMode
   );
-  if (blackHoleWarning) {
+  // 旧的跳档提示假设运输费不随价格变化；OGL跨组建议统一由定价矩阵给出。
+  if (blackHoleWarning && (!shippingChannel || getLogisticsMode(shippingChannel) !== "OGL")) {
     suggestions.push(blackHoleWarning);
   }
 
@@ -1616,6 +1685,7 @@ export function performFullCalculation(
     domesticShipping +
     packagingFee +
     internationalShipping + 
+    oglServiceFee +
     returnCost;
   
   // 计算保本 ACOS
@@ -1658,7 +1728,7 @@ export function performFullCalculation(
   
   // ===== 新增：智能提醒计算 =====
   // 佣金跳档感应
-  const commissionTierBoundary = detectCommissionTierBoundary(
+  const commissionTierBoundary = shippingChannel && getLogisticsMode(shippingChannel) === "OGL" ? { isNearBoundary: false } : detectCommissionTierBoundary(
     priceRUB,
     input.exchangeRate,
     activeCommission,
@@ -1708,6 +1778,7 @@ export function performFullCalculation(
       domesticShipping,
       packaging: packagingFee,
       internationalShipping,
+      oglServiceFee,
       commission: commissionAmount,
       cpaCost,
       cpcCost,
