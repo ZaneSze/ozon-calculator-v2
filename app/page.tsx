@@ -51,7 +51,7 @@ import {
   downloadCommissionTemplate,
   downloadShippingTemplate,
 } from "@/lib/template-export";
-import { calculateOzonBackendPricing } from "@/lib/ozon-pricing";
+import { calculateOzonPricing, formatPricingFactor, getPricingFactor, normalizePricingSettings } from "@/lib/ozon-pricing";
 import { isProfitMarginBelowThreshold } from "@/lib/profit-threshold";
 import { formatWeightWithKg } from "@/lib/weight-format";
 import { WeightWithKg } from "@/components/weight-with-kg";
@@ -335,11 +335,11 @@ function getRiskLevel(result: CalculationResult | null, availableCount: number, 
 }
 
 // 🔹 工具函数：导出配置
-function exportConfig() {
+function exportConfig(input: CalculationInput) {
   const config = {
     version: "1.0",
     timestamp: new Date().toISOString(),
-    input: localStorage.getItem(STORAGE_KEY),
+    input: JSON.stringify(input),
     columnMappings: {
       commission: localStorage.getItem("ozon_commission_mappings"),
       shipping: localStorage.getItem("ozon_shipping_mappings"),
@@ -989,6 +989,7 @@ export default function Home() {
     setInput({
       ...EMPTY_INPUT,
       exchangeRate: nextExchangeRate,
+      pricingSettings: input.pricingSettings,
     });
     setSelectedChannelId(null);
     setMarginError(null);
@@ -1005,7 +1006,7 @@ export default function Home() {
     localStorage.removeItem("ozon-locked-margin");
 
     setUploadToast({ message: "✅ 已清空计算输入，导入数据已保留", type: "success" });
-  }, [input.exchangeRate]);
+  }, [input.exchangeRate, input.pricingSettings]);
 
   const appendImportWarning = useCallback((message: string, summary: { warnings?: string[] }) => {
     const warning = summary.warnings?.[summary.warnings.length - 1];
@@ -1242,7 +1243,10 @@ export default function Home() {
   const handleExportSingleReport = useCallback(() => {
     const activeTax = result.taxes?.enabled ? result.taxes : null;
     const firstSuggestion = result.suggestions[0] || (result.netProfit < 0 ? "提高售价或降低成本" : "继续观察物流与广告风险");
-    const ozonPricing = calculateOzonBackendPricing(input.targetPriceRMB, input.exchangeRate);
+    const settings = normalizePricingSettings(input.pricingSettings);
+    const ozonPricing = calculateOzonPricing(input.targetPriceRMB, input.exchangeRate, settings);
+    const describeFactor = (base: string, multiplier: number) =>
+      `${base} × ${formatPricingFactor(multiplier)}（等效 ${getPricingFactor("discount", multiplier).toFixed(2)} 折反推），向上取整到元`;
     downloadCsv(
       `ozon_single_report_${new Date().toISOString().slice(0, 10)}.csv`,
       ["模块", "项目", "值", "说明"],
@@ -1253,18 +1257,21 @@ export default function Home() {
         ["输入", "经营模式", input.fulfillmentMode || "RFBS", "平台佣金口径"],
         ["输入", "尺寸", `${input.length}x${input.width}x${input.height} cm`, ""],
         ["输入", "重量", formatWeightWithKg(input.weight), "输入单位仍为 g"],
-        ["定价", "售价RMB", input.targetPriceRMB, ""],
-        ["定价", "售价RUB", cnyToRub(input.targetPriceRMB, input.exchangeRate).toFixed(0), ""],
+        ["定价", "目标售价RMB", input.targetPriceRMB, ""],
+        ["定价", "目标售价RUB", cnyToRub(input.targetPriceRMB, input.exchangeRate).toFixed(0), ""],
         ...(input.exchangeRateBuffer > 0 ? [
           ["汇率", "安全缓冲", `${input.exchangeRateBuffer}%`, "利润按风险回款口径计算"],
           ["汇率", "风险回款RMB", effectiveTargetPriceRMB.toFixed(2), "前台RUB不变，回款汇率恶化后的收入"],
           ["汇率", "风险回款汇率", `1 CNY = ${effectiveRubPerCny.toFixed(4)} RUB`, "用于净利/ROI/利润率计算"],
         ] : []),
+        ["定价", "计算方式", settings.mode === "multiplier" ? "按倍数" : "按折扣", ""],
+        ["定价", "最高价格系数", formatPricingFactor(getPricingFactor(settings.mode, settings.highestMultiplier)), describeFactor("目标售价", settings.highestMultiplier)],
+        ["定价", "划线价系数", formatPricingFactor(getPricingFactor(settings.mode, settings.strikeMultiplier)), describeFactor("最高价格", settings.strikeMultiplier)],
         ...(ozonPricing.isValid ? [
-          ["定价", "Ozon后台定价RMB", String(ozonPricing.ozonBackendPriceRMB), "前台售价 ÷ 40%"],
-          ["定价", "Ozon折扣前价格RMB", String(ozonPricing.ozonOriginalPriceRMB), "后台定价 ÷ 60%"],
-          ["定价", "Ozon后台定价RUB", ozonPricing.ozonBackendPriceRUB, "参考平台币种"],
-          ["定价", "Ozon折扣前价格RUB", ozonPricing.ozonOriginalPriceRUB, "参考平台币种"],
+          ["定价", "最高价格RMB", ozonPricing.highestPriceRMB, describeFactor("目标售价", settings.highestMultiplier)],
+          ["定价", "划线价RMB", ozonPricing.strikePriceRMB, describeFactor("最高价格", settings.strikeMultiplier)],
+          ["定价", "最高价格RUB", ozonPricing.highestPriceRUB, "按当前汇率折算"],
+          ["定价", "划线价RUB", ozonPricing.strikePriceRUB, "按当前汇率折算"],
         ] : []),
         ["结果", "净利润", result.netProfit.toFixed(2), result.taxes?.enabled ? "已含税" : "默认税前口径"],
         ["结果", "ROI", result.roi.toFixed(1), "%"],
@@ -1863,16 +1870,16 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* 🔹 顶部控制台 - 极致扁平化 */}
-      <header className="sticky top-0 z-[100] w-full bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm h-11">
+      <header className="sticky top-0 z-[100] w-full bg-card border-b border-border shadow-panel h-11">
         {/* 外部容器 */}
         <div className="relative mx-auto flex h-full w-full max-w-[1480px] items-center justify-between px-3">
           {/* 左侧：品牌标题 */}
           <div className="min-w-0 flex-shrink-0">
             <div className="flex items-center gap-2" title="Ozon 跨境利润精算工作台">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-700 shadow-sm">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-primary/20 bg-accent text-primary">
                 <WalletCards className="h-4 w-4" />
               </span>
-              <span className="min-w-0 truncate text-xs font-black tracking-normal text-slate-700">
+              <span className="min-w-0 truncate text-xs font-bold tracking-normal text-foreground">
                 <span className="hidden sm:inline">Ozon 跨境利润精算工作台</span>
                 <span className="sm:hidden">Ozon 精算</span>
               </span>
@@ -1940,7 +1947,7 @@ export default function Home() {
                 <a href="/data/OGL_2026-08-24.xlsx" download className="block w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50">OGL官方费率表（2026-08-24）</a>
                 <button onClick={downloadBatchTemplate} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">批量计算模板</button>
                 <div className="px-3 py-2 border-t text-xs font-medium text-slate-600">配置</div>
-                <button onClick={() => exportConfig()} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">导出配置</button>
+                <button onClick={() => exportConfig(input)} className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50">导出配置</button>
                 <label className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
                   <FileText className="h-3 w-3" />
                   <span>导入配置</span>
@@ -1965,21 +1972,21 @@ export default function Home() {
             </div>
             
             {/* 经营模式 - 平台佣金口径 */}
-            <div className="hidden h-8 flex-shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-1 sm:flex">
+            <div className="hidden h-8 flex-shrink-0 items-center gap-1 rounded-md border border-border bg-secondary p-1 sm:flex">
               {(["RFBS", "FBP"] as const).map((mode) => (
-                <button
+                <Button
                   key={mode}
                   type="button"
+                  variant="segmented"
+                  size="xs"
+                  data-active={(input.fulfillmentMode || "RFBS") === mode}
+                  aria-pressed={(input.fulfillmentMode || "RFBS") === mode}
                   onClick={() => setInput((prev) => ({ ...prev, fulfillmentMode: mode }))}
-                  className={`h-6 rounded px-2 text-[11px] font-bold transition-colors ${
-                    (input.fulfillmentMode || "RFBS") === mode
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-500 hover:bg-white hover:text-slate-700"
-                  }`}
+                  className="h-6 px-2 text-[11px] font-bold"
                   title={`${mode} 佣金模式`}
                 >
                   {mode}
-                </button>
+                </Button>
               ))}
             </div>
             
@@ -2168,7 +2175,7 @@ export default function Home() {
       
       {/* 🔹 主内容区 - 四区紧凑经营工作台 */}
       <main className="mx-auto flex-1 w-full max-w-[1480px] overflow-y-auto px-3 py-2 xl:overflow-hidden">
-        <section className="-mx-3 mb-2 flex min-h-14 flex-wrap items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <section className="-mx-3 mb-2 flex min-h-14 flex-wrap items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-panel">
           {([
             { label: "净利", value: `¥${result.netProfit.toFixed(1)}`, className: getFinanceTextClass(result.netProfit), important: true },
             { label: "ROI", value: `${result.roi.toFixed(1)}%`, className: getFinanceTextClass(result.roi), important: true },
@@ -2176,7 +2183,7 @@ export default function Home() {
           ] as const).map((item) => (
             <div
               key={item.label}
-              className="flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] px-3 min-w-0 sm:min-w-[120px]"
+              className="flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-secondary px-3 min-w-0 sm:min-w-[120px]"
             >
               <span className="text-[11px] font-semibold text-slate-500">{item.label}</span>
               <span className={`text-xl font-black leading-none tabular-nums ${item.className}`}>{item.value}</span>
@@ -2186,14 +2193,14 @@ export default function Home() {
           {([
             { label: "总成本", value: `¥${result.costs.total.toFixed(1)}`, className: "text-slate-800" },
             { label: "佣金", value: `¥${result.costs.commission.toFixed(1)} (${result.commissionRate}%)`, className: "text-slate-800" },
-            { label: "售价", value: `¥${input.targetPriceRMB.toFixed(0)}`, className: "text-indigo-700" },
+            { label: "售价", value: `¥${input.targetPriceRMB.toFixed(0)}`, className: "text-primary" },
             { label: "可发渠道", value: `${shippingChannels.available.length}/${shippingChannels.available.length + shippingChannels.unavailable.length}`, className: shippingChannels.available.length > 0 ? "text-emerald-700" : "text-red-700" },
           ] as const).map((item) => (
             <div
               key={item.label}
               className="flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5"
             >
-              <span className="text-[10px] font-medium text-slate-400">{item.label}</span>
+              <span className="text-[10px] font-medium text-muted-foreground">{item.label}</span>
               <span className={`text-sm font-bold leading-none tabular-nums ${item.className}`}>{item.value}</span>
             </div>
           ))}
@@ -2249,10 +2256,10 @@ export default function Home() {
           {/* 右侧物流列表 */}
           <div className="col-span-1 flex min-h-0 flex-col gap-2 overflow-visible xl:h-full xl:overflow-hidden">
             {/* 物流筛选区 */}
-            <div className="rounded-lg border bg-card p-2">
+            <div className="rounded-lg border border-border bg-card p-2 shadow-panel">
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Truck className="h-4 w-4" />
+                  <Truck className="h-4 w-4 text-primary" />
                   物流渠道
                 </h3>
                 <span className="text-[10px] text-muted-foreground">
@@ -2270,10 +2277,10 @@ export default function Home() {
                 ))}
               </div>
               {input.logisticsMode === "OGL" && (
-                <div className="mb-2 rounded border border-blue-100 bg-blue-50 p-2 text-xs leading-5 text-blue-900">
+                <div className="mb-2 rounded-md border border-primary/15 bg-accent p-2 text-xs leading-5 text-foreground">
                   <p>费用 = 运输费（固定费 + 每克运费）+ 电子服务费（货值2%，每票15–200卢布）。Big / Premium Big计抛，其余按实重。</p>
                   <p>内置费率生效日：{OGL_RATE_DATE}。可上传新表更新；服务可用性以卖家账户为准。</p>
-                  <a href={OGL_SOURCE_URL} target="_blank" rel="noreferrer" className="underline">官方费用规则</a>
+                  <a href={OGL_SOURCE_URL} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">官方费用规则</a>
                 </div>
               )}
               {/* 物流多选筛选 */}
@@ -2368,31 +2375,31 @@ export default function Home() {
             
               {/* 🔹 唯一物流列表（唯一物流模块） */}
             {selectedChannel && (
-              <div className="overflow-hidden rounded-lg border-2 border-indigo-400 bg-gradient-to-r from-indigo-600 to-indigo-500 px-3 py-2 text-xs text-white shadow-lg shadow-indigo-200/70 sticky top-0 z-10">
-                <div className="absolute inset-y-0 left-0 w-1 bg-white/80" aria-hidden="true" />
+              <div className="sticky top-0 z-10 overflow-hidden rounded-lg border-2 border-primary/35 bg-accent px-3 py-2 text-xs text-foreground shadow-panel">
+                <div className="absolute inset-y-0 left-0 w-1 bg-primary" aria-hidden="true" />
                 <div className="flex items-center justify-between gap-2 pl-1">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 font-black">
-                      <span className="rounded bg-white px-1.5 py-0.5 text-[10px] text-indigo-700">当前计算物流</span>
+                      <span className="rounded bg-card px-1.5 py-0.5 text-[10px] text-primary">当前计算物流</span>
                       <span className="truncate">{selectedChannel.thirdParty || "Ozon"} / {selectedChannel.name}</span>
                     </div>
-                    <div className="mt-1 truncate text-white/85">
+                    <div className="mt-1 truncate text-muted-foreground">
                       物流总费 ¥{((channelCosts.get(selectedChannel.id) ?? 0) + (result.costs.oglServiceFee || 0)).toFixed(2)}
                       <span className="mx-1">·</span>
                       {selectedBillingInfo?.isVolumetric ? (
                         <span className="inline-flex items-center gap-1">
                           <span>计抛</span>
-                          <WeightWithKg weightG={selectedBillingInfo.billingWeight} kgClassName="text-indigo-100/85" />
+                          <WeightWithKg weightG={selectedBillingInfo.billingWeight} kgClassName="text-muted-foreground" />
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1">
                           <span>实重</span>
-                          <WeightWithKg weightG={selectedBillingInfo?.billingWeight || input.weight} kgClassName="text-indigo-100/85" />
+                          <WeightWithKg weightG={selectedBillingInfo?.billingWeight || input.weight} kgClassName="text-muted-foreground" />
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="shrink-0 rounded-md bg-white/15 px-2 py-1 text-[10px] font-bold ring-1 ring-white/25">
+                  <div className="shrink-0 rounded-md bg-primary px-2 py-1 text-[10px] font-bold text-primary-foreground">
                     已选中
                   </div>
                 </div>
@@ -2402,9 +2409,9 @@ export default function Home() {
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-thin">
               {/* 🔹 智能推荐提示 */}
               {(!input.designatedProviders || input.designatedProviders.length === 0) && shippingChannels.available.length > 0 && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-xs">
+                <div className="rounded-lg border border-border bg-card p-2 text-xs">
                   <div className="flex items-center gap-2">
-                    <span className="text-blue-700">
+                    <span className="text-muted-foreground">
                       根据您的商品属性，已为您
                       {sortMode === 'cost' ? '按费用推荐' : sortMode === 'time' ? '按时效推荐' : '按评分推荐'}
                       ，前 <strong>{Math.min(shippingChannels.available.length, 10)}</strong> 条渠道
@@ -2780,9 +2787,9 @@ function MultiItemConfirmDialog({
 
           <div className="h-px bg-slate-100" />
 
-          {/* 前台售价 */}
+          {/* 目标售价 */}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-700">前台售价 (RMB)</label>
+            <label className="text-xs font-medium text-slate-700">目标售价 (RMB)</label>
             <div className="relative">
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">¥</span>
               <input

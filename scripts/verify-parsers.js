@@ -42,7 +42,10 @@ const {
 } = loadTsModule(path.join("lib", "template-export.ts"));
 
 const {
-  calculateOzonBackendPricing,
+  calculateOzonPricing,
+  getPricingFactor,
+  normalizePricingSettings,
+  pricingFactorToMultiplier,
 } = loadTsModule(path.join("lib", "ozon-pricing.ts"));
 
 const {
@@ -956,20 +959,44 @@ assertEqual(batchTemplateResult.rows.length, 3, "batch template sample row count
 assertEqual(batchTemplateResult.rows[0].targetPriceRMB, 125, "batch template target price");
 
 assertDeepEqual(
-  calculateOzonBackendPricing(125, 12),
+  calculateOzonPricing(125, 12),
   {
     isValid: true,
-    frontPriceRMB: 125,
-    frontPriceRUB: 1500,
-    ozonBackendPriceRMB: 313,
-    ozonBackendPriceRUB: 3756,
-    ozonOriginalPriceRMB: 522,
-    ozonOriginalPriceRUB: 6264,
+    targetPriceRMB: 125,
+    targetPriceRUB: 1500,
+    highestPriceRMB: 313,
+    highestPriceRUB: 3756,
+    strikePriceRMB: 522,
+    strikePriceRUB: 6264,
   },
-  "Ozon backend pricing"
+  "历史配置沿用原定价结果"
 );
-assertEqual(calculateOzonBackendPricing(0, 12).isValid, false, "Ozon pricing invalid without price");
-assertEqual(calculateOzonBackendPricing(125, 0).isValid, false, "Ozon pricing invalid without rate");
+const customPricing = { mode: "multiplier", highestMultiplier: 2, strikeMultiplier: 1.25 };
+const customPrices = calculateOzonPricing(125, 12, customPricing);
+assertEqual(customPrices.highestPriceRMB, 250, "最高价格以目标售价为基准");
+assertEqual(customPrices.strikePriceRMB, 313, "划线价以最高价格为基准并向上取整");
+assertEqual(customPrices.strikePriceRUB, 3756, "卢布按最终人民币划线价换算");
+assertEqual(getPricingFactor("discount", customPricing.highestMultiplier), 5, "2 倍等效 5 折");
+assertEqual(getPricingFactor("discount", customPricing.strikeMultiplier), 8, "1.25 倍等效 8 折");
+assertDeepEqual(
+  calculateOzonPricing(125, 12, {
+    mode: "discount",
+    highestMultiplier: pricingFactorToMultiplier("discount", 5),
+    strikeMultiplier: pricingFactorToMultiplier("discount", 8),
+  }),
+  customPrices,
+  "等效折扣与倍数得出相同价格"
+);
+assertEqual(calculateOzonPricing(100, 12, { ...customPricing, highestMultiplier: 1.1 }).highestPriceRMB, 110, "浮点误差不应多进一元");
+for (const value of [0, -1, 10.1, NaN, Infinity]) {
+  assertEqual(pricingFactorToMultiplier("discount", value), undefined, "拒绝无效折数");
+}
+assertEqual(pricingFactorToMultiplier("multiplier", 0.9), undefined, "倍数不能低于 1");
+assertEqual(pricingFactorToMultiplier("discount", 10), 1, "10 折等效 1 倍");
+assertEqual(normalizePricingSettings({ highestMultiplier: null }).highestMultiplier, 2.5, "异常的历史配置恢复默认系数");
+assertEqual(calculateOzonPricing(0, 12).isValid, false, "目标售价为空时不显示衍生价格");
+assertEqual(calculateOzonPricing(125, 0).isValid, false, "无有效汇率时不显示衍生价格");
+assertEqual(calculateOzonPricing(125, 12, { ...customPricing, highestMultiplier: Number.MAX_VALUE }).isValid, false, "价格溢出时不显示衍生价格");
 assertEqual(isProfitMarginBelowThreshold(20, 20), false, "profit threshold should not warn at exact threshold");
 assertEqual(isProfitMarginBelowThreshold(19.96, 20), false, "profit threshold should use one-decimal display rounding");
 assertEqual(isProfitMarginBelowThreshold(19.94, 20), true, "profit threshold should warn below display threshold");

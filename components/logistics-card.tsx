@@ -105,22 +105,22 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
     <div 
       onClick={onClick}
       aria-pressed={isSelected}
-      className={`relative mb-1.5 cursor-pointer overflow-hidden rounded-lg border p-2.5 transition-all ${
+      className={`relative mb-1.5 cursor-pointer overflow-hidden rounded-lg border p-2.5 transition-colors ${
         !isAvailable 
           ? 'bg-secondary opacity-60 border-border' 
           : isSelected 
-            ? 'border-indigo-500 bg-indigo-50 shadow-md ring-2 ring-indigo-500/25' 
-            : 'border-border bg-card hover:border-indigo-200 hover:shadow-md'
+            ? 'border-primary bg-accent ring-1 ring-inset ring-primary/45'
+            : 'border-border bg-card hover:border-primary/40'
       }`}
     >
       {isSelected && (
-        <div className="absolute inset-y-0 left-0 w-1 bg-indigo-600" aria-hidden="true" />
+        <div className="absolute inset-y-0 left-0 w-1 bg-primary" aria-hidden="true" />
       )}
       {/* 1. 顶部状态栏：时效 + 计抛强提醒 + Ozon 评级 */}
       <div className="mb-1.5 flex items-center justify-between gap-2 pl-1">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {isSelected && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
+            <span className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
               <CheckCircle2 className="h-3 w-3" />
               当前计算
             </span>
@@ -130,7 +130,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
             {channel.deliveryTimeMin > 0 ? `${channel.deliveryTimeMin}-${channel.deliveryTimeMax} 天` : "时效未提供"}
           </span>
           {showVolumetricLabel && isAvailable && (
-            <span className="rounded bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
+            <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900">
               计抛
             </span>
           )}
@@ -150,22 +150,22 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
       {/* 2. 标题与价格区 */}
       <div className="mb-1.5 flex items-start justify-between gap-3 pl-1">
         <div className="min-w-0 flex-1">
-          <h3 className={`truncate text-sm font-bold leading-tight ${isSelected ? "text-indigo-950" : "text-foreground"}`}>
+          <h3 className="truncate text-sm font-bold leading-tight text-foreground">
             {channel.name}
           </h3>
           <div className="flex items-center gap-1.5 mt-1">
-            <span className="text-[10px] bg-indigo-50 text-[#6366F1] px-1.5 py-0.5 rounded border border-indigo-100">
+            <span className="rounded border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
               {channel.serviceLevel || '标准服务'}
             </span>
             <span className="text-[10px] text-muted-foreground">{channel.thirdParty || 'Ozon网络'}</span>
           </div>
         </div>
-        <div className={`rounded-md px-2 py-1 text-right ${isSelected ? "bg-white shadow-sm ring-1 ring-indigo-100" : ""}`}>
-          <div className="text-lg font-black leading-5 text-[#6366F1]">
+        <div className={`rounded-md px-2 py-1 text-right ${isSelected ? "bg-card ring-1 ring-border" : ""}`}>
+          <div className="text-lg font-bold leading-5 tabular-nums text-primary">
             ¥ {freightData.total.toFixed(2)}
           </div>
           {isSelected && (
-            <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
+            <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-accent px-1.5 py-0.5 text-[10px] font-bold text-primary">
               <CheckCircle2 className="h-3 w-3" />
               已选中
             </div>
@@ -179,7 +179,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
         </div>
       </div>
 
-      {isOgl && <div className="mb-2 rounded bg-blue-50 px-2 py-1 text-xs text-blue-900">
+      {isOgl && <div className="mb-2 rounded-md bg-secondary px-2 py-1 text-xs text-muted-foreground">
         运输费 ¥{cost.toFixed(2)} + 电子服务费 ¥{serviceFee.toFixed(2)}
       </div>}
       {/* 3. 特货属性横条 - 醒目对比 */}
@@ -223,7 +223,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
 
       {/* 5. 计费详情 (默认折叠) - 计费重醒目 - 带动画 */}
       <details className="group ml-1 mt-2">
-        <summary className="text-[10px] cursor-pointer hover:text-[#6366F1] list-none flex items-center gap-1 select-none font-medium">
+        <summary className="text-[10px] cursor-pointer hover:text-primary list-none flex items-center gap-1 select-none font-medium">
           <span className="transition-transform duration-200 group-open:rotate-180">▼</span> 
           <span>查看计费详情 </span>
           <span className={`font-bold ${billing?.isVolumetric ? "text-[#EF4444]" : "text-foreground"}`}>
@@ -251,7 +251,7 @@ export function LogisticsCard({ channel, cost, billing, isSelected, onClick, inp
           {/* 计费重 - 最醒目 */}
           <div className="flex justify-between font-bold pt-2 border-t-2 border-amber-300">
             <span>计费重:</span>
-            <span className={`text-lg ${billing?.isVolumetric ? "text-[#EF4444] bg-red-100 px-2 rounded" : "text-[#6366F1] bg-indigo-100 px-2 rounded"}`}>
+            <span className={`text-lg ${billing?.isVolumetric ? "text-red-700 bg-red-100 px-2 rounded" : "text-primary bg-accent px-2 rounded"}`}>
               <WeightWithKg weightG={billing?.billingWeight || 0} kgClassName={billing?.isVolumetric ? "text-red-500/70" : "text-indigo-500/75"} />
             </span>
           </div>

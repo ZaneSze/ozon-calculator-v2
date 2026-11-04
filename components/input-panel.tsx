@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { Package, Truck, Megaphone, Tag, AlertTriangle, RotateCcw, Battery, Droplets, CheckCircle2, DollarSign, Lock, Unlock, ChevronDown, Copy } from "lucide-react";
+import { Package, Truck, Megaphone, Tag, AlertTriangle, RotateCcw, Battery, Droplets, CheckCircle2, DollarSign, Lock, Unlock, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -20,7 +20,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { useDataHub } from "@/lib/data-hub-context";
 import { CalculationInput, ShippingChannel } from "@/lib/types";
-import { calculateOzonBackendPricing } from "@/lib/ozon-pricing";
+import { OzonPriceSettings } from "@/components/ozon-price-settings";
 import { isProfitMarginBelowThreshold } from "@/lib/profit-threshold";
 import { WeightWithKg } from "@/components/weight-with-kg";
 import { calculateOriginalPrice, normalizePromotionDiscount } from "@/lib/calculator";
@@ -173,21 +173,21 @@ function Section({
   return (
     <details
       open={openSections[id] ?? defaultOpen}
-      className="group rounded-lg border bg-card text-card-foreground shadow-none"
+      className="group rounded-lg border border-border bg-card text-card-foreground shadow-panel"
       onToggle={(event) => {
         const isOpen = event.currentTarget.open;
         setOpenSections((current) => current[id] === isOpen ? current : { ...current, [id]: isOpen });
       }}
     >
-      <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-1 text-sm font-semibold">
-        <span className="flex min-w-0 items-center gap-2">
+      <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-sm font-semibold transition-colors hover:bg-secondary group-open:rounded-b-none">
+        <span className="flex min-w-0 items-center gap-2 [&>svg]:text-primary">
           {icon}
           <span className="shrink-0">{title}</span>
           <span className="text-[11px] font-medium text-muted-foreground">{summary}</span>
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 self-start mt-1.5 text-slate-400 transition-transform group-open:rotate-180" />
+        <ChevronDown className="h-4 w-4 shrink-0 self-start mt-1.5 text-muted-foreground transition-transform group-open:rotate-180" />
       </summary>
-      <div className="border-t border-slate-100 p-2.5">{children}</div>
+      <div className="border-t border-border p-2.5">{children}</div>
     </details>
   );
 }
@@ -359,10 +359,6 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
     localStorage.setItem("input-panel-sections", JSON.stringify(openSections));
   }, [openSections]);
 
-  const ozonPricing = useMemo(
-    () => calculateOzonBackendPricing(input.targetPriceRMB, input.exchangeRate),
-    [input.targetPriceRMB, input.exchangeRate]
-  );
   const cpcBillingMode = input.cpcBillingMode || "bidCvr";
   const cpcSalesCostRMB = input.targetPriceRMB > 0 ? input.targetPriceRMB * ((input.cpcSalesPercent || 0) / 100) : 0;
   const starPlanCostRMB = input.starPlanEnabled && input.targetPriceRMB > 0 ? input.targetPriceRMB * ((input.starPlanRate ?? 1.5) / 100) : 0;
@@ -763,10 +759,10 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
               <button
                 type="button"
                 onClick={() => updateField("cpaEnabled", !input.cpaEnabled)}
-                className={`px-3 py-1 rounded-md text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-1 ${
+                className={`cursor-pointer rounded-md px-3 py-1 text-xs font-bold transition-colors ${
                   input.cpaEnabled
-                    ? "bg-green-500 text-white shadow-sm"
-                    : "bg-slate-200 text-slate-500"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-muted-foreground ring-1 ring-inset ring-input hover:bg-accent"
                 }`}
                 aria-label={input.cpaEnabled ? "关闭CPA广告" : "开启CPA广告"}
               >
@@ -802,10 +798,10 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
               <button
                 type="button"
                 onClick={() => updateField("cpcEnabled", !input.cpcEnabled)}
-                className={`px-3 py-1 rounded-md text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-1 ${
+                className={`cursor-pointer rounded-md px-3 py-1 text-xs font-bold transition-colors ${
                   input.cpcEnabled
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-slate-200 text-slate-500"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-muted-foreground ring-1 ring-inset ring-input hover:bg-accent"
                 }`}
                 aria-label={input.cpcEnabled ? "关闭CPC广告" : "开启CPC广告"}
               >
@@ -1087,7 +1083,7 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
         title="定价税务"
         summary={(
           <span className="inline-flex items-center gap-1 whitespace-nowrap">
-            <span>售价 ¥{input.targetPriceRMB || 0}</span>
+            <span>目标售价 ¥{input.targetPriceRMB || 0}</span>
             <span className="text-gray-300">/</span>
             <span>支付 {input.paymentFee || 0}%</span>
             <span className="text-gray-300">/</span>
@@ -1104,10 +1100,11 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
           <div className="grid grid-cols-2 gap-2">
             {/* RMB 售价 */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">前台售价 (RMB)</Label>
+              <Label htmlFor="target-price-rmb" className="text-xs font-medium">目标售价 (RMB)</Label>
               <div className="relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">¥</span>
                 <Input
+                  id="target-price-rmb"
                   type="number"
                   min="0"
                   step="1"
@@ -1127,10 +1124,11 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
             </div>
             {/* RUB 售价 */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">前台售价 (RUB)</Label>
+              <Label htmlFor="target-price-rub" className="text-xs font-medium">目标售价 (RUB)</Label>
               <div className="relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium">₽</span>
                 <Input
+                  id="target-price-rub"
                   type="number"
                   min="0"
                   step="1"
@@ -1160,7 +1158,7 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-amber-800">建议填入前台售价</div>
+                  <div className="text-xs font-bold text-amber-800">建议填入目标售价</div>
                   <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <span className="text-lg font-black tabular-nums text-amber-700">
                       ¥{suggestedPriceInfo.suggestedPriceRMB}
@@ -1275,7 +1273,7 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
                   isUpdatingFromMargin.current = true;
                   onReversePriceFromMargin?.(20);
                 }}
-                className="h-8 w-11 shrink-0 rounded border border-indigo-200 bg-indigo-50 text-[10px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-8 w-11 shrink-0 cursor-pointer rounded-md border border-primary/25 bg-accent text-[10px] font-bold text-primary transition-colors hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="按 20% 目标利润率反推售价"
               >
                 20%
@@ -1287,44 +1285,13 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
               </div>
             )}
           </div>
-          {ozonPricing.isValid && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <div className="text-xs font-bold text-slate-700">Ozon 后台填写价</div>
-                <div className="text-[10px] text-slate-500">前台=后台4折，后台=折前6折</div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  {
-                    label: "后台定价",
-                    valueRMB: ozonPricing.ozonBackendPriceRMB,
-                    valueRUB: ozonPricing.ozonBackendPriceRUB,
-                  },
-                  {
-                    label: "折扣前价格",
-                    valueRMB: ozonPricing.ozonOriginalPriceRMB,
-                    valueRUB: ozonPricing.ozonOriginalPriceRUB,
-                  },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-md border border-white bg-white px-2 py-1.5 shadow-sm">
-                    <div className="mb-1 flex items-center justify-between gap-1">
-                      <span className="text-[10px] font-medium text-slate-500">{item.label}</span>
-                      <button
-                        type="button"
-                        onClick={() => onCopyOzonPrice?.(item.label, String(item.valueRMB))}
-                        className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                        title={`复制${item.label}`}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <div className="text-sm font-black tabular-nums text-slate-800">¥{item.valueRMB.toFixed(2)}</div>
-                    <div className="text-[10px] text-slate-500">≈ ₽{item.valueRUB.toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <OzonPriceSettings
+            settings={input.pricingSettings}
+            targetPriceRMB={input.targetPriceRMB}
+            exchangeRate={input.exchangeRate}
+            onChange={(settings) => updateField("pricingSettings", settings)}
+            onCopy={onCopyOzonPrice}
+          />
           {/* 🔹 竞品价格对比 - 简化版 */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">竞品售价</Label>
@@ -1352,8 +1319,9 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
                       updateField("rivalCurrency", 'RMB');
                     }
                   }}
-                  className={`px-2 py-1 text-xs font-medium transition-colors ${
-                    rivalCurrency === 'RMB' ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-500"
+                  aria-pressed={rivalCurrency === 'RMB'}
+                  className={`cursor-pointer px-2 py-1 text-xs font-medium transition-colors focus-visible:-outline-offset-2 ${
+                    rivalCurrency === 'RMB' ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:bg-accent"
                   }`}
                 >
                   ¥
@@ -1371,8 +1339,9 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
                       updateField("rivalCurrency", 'RUB');
                     }
                   }}
-                  className={`px-2 py-1 text-xs font-medium transition-colors ${
-                    rivalCurrency === 'RUB' ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-500"
+                  aria-pressed={rivalCurrency === 'RUB'}
+                  className={`cursor-pointer px-2 py-1 text-xs font-medium transition-colors focus-visible:-outline-offset-2 ${
+                    rivalCurrency === 'RUB' ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:bg-accent"
                   }`}
                 >
                   ₽
@@ -1460,10 +1429,10 @@ export function InputPanel({ input, onInputChange, rivalPrice, rivalCurrency = '
               <button
                 type="button"
                 onClick={() => updateField("taxEnabled", !input.taxEnabled)}
-                className={`px-3 py-1 rounded-md text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:ring-offset-1 ${
+                className={`cursor-pointer rounded-md px-3 py-1 text-xs font-bold transition-colors ${
                   input.taxEnabled
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : "bg-slate-200 text-slate-500"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-muted-foreground ring-1 ring-inset ring-input hover:bg-accent"
                 }`}
                 aria-label={input.taxEnabled ? "关闭税务模拟" : "开启税务模拟"}
               >

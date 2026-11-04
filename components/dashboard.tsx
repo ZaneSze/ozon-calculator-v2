@@ -38,7 +38,7 @@ import { CategoryCommission, CalculationResult, CalculationInput, ShippingChanne
 import { calculateShippingCost } from "@/lib/data-hub-context";
 import { getCommissionRate, getCommissionTiersForMode, calculateMarginalContribution, calculateNetProfit, detectShippingDimensionLimits } from "@/lib/calculator";
 import { cnyToRub, getRiskAdjustedRevenueRMB, getRiskAdjustedRubPerCny, rubToCny } from "@/lib/currency";
-import { calculateOzonBackendPricing } from "@/lib/ozon-pricing";
+import { calculateOzonPricing } from "@/lib/ozon-pricing";
 import { isProfitMarginBelowThreshold } from "@/lib/profit-threshold";
 import { calculateOglServiceFee } from "@/lib/ogl";
 import { WeightWithKg } from "@/components/weight-with-kg";
@@ -717,18 +717,9 @@ export function Dashboard({
         <CardContent className="px-4 pb-4">
           <div className="grid gap-2 md:grid-cols-3">
             {sixTierPricing.map((tier, index) => {
-              const colorConfig: Record<string, { border: string; bg: string; text: string; badge: string; soft: string }> = {
-                red: { border: "border-red-200", bg: "bg-red-50/80", text: "text-red-700", badge: "bg-red-100 text-red-700", soft: "bg-red-100/70" },
-                orange: { border: "border-orange-200", bg: "bg-orange-50/80", text: "text-orange-700", badge: "bg-orange-100 text-orange-700", soft: "bg-orange-100/70" },
-                amber: { border: "border-amber-200", bg: "bg-amber-50/80", text: "text-amber-700", badge: "bg-amber-100 text-amber-700", soft: "bg-amber-100/70" },
-                green: { border: "border-emerald-200", bg: "bg-emerald-50/80", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-700", soft: "bg-emerald-100/70" },
-                blue: { border: "border-blue-200", bg: "bg-blue-50/80", text: "text-blue-700", badge: "bg-blue-100 text-blue-700", soft: "bg-blue-100/70" },
-                purple: { border: "border-purple-200", bg: "bg-purple-50/80", text: "text-purple-700", badge: "bg-purple-100 text-purple-700", soft: "bg-purple-100/70" },
-              };
-              const colors = colorConfig[tier.color] || colorConfig.green;
               const isRecommended = index === recommendedTierIndex;
               const isSelected = index === displaySelectedTierIndex;
-              const ozonTierPricing = calculateOzonBackendPricing(tier.priceRMB, input.exchangeRate);
+              const ozonTierPricing = calculateOzonPricing(tier.priceRMB, input.exchangeRate, input.pricingSettings);
 
               return (
                 <div
@@ -736,6 +727,7 @@ export function Dashboard({
                   role="button"
                   tabIndex={tier.disabled ? -1 : 0}
                   aria-disabled={tier.disabled}
+                  aria-pressed={isSelected}
                   onClick={() => !tier.disabled && applyTierPrice(index, tier.priceRMB)}
                   onKeyDown={(event) => {
                     if (!tier.disabled && (event.key === "Enter" || event.key === " ")) {
@@ -743,22 +735,22 @@ export function Dashboard({
                       applyTierPrice(index, tier.priceRMB);
                     }
                   }}
-                  className={`min-h-[148px] rounded-xl border p-2.5 text-left transition-all ${
+                  className={`min-h-[148px] rounded-lg border p-2.5 text-left transition-colors ${
                     isSelected
-                      ? "border-2 border-[#5B5CF6] bg-indigo-50 shadow-[0_0_0_3px_rgba(91,92,246,0.18)]"
+                      ? "border-primary bg-accent ring-1 ring-inset ring-primary/45"
                       : isRecommended
-                        ? "border-[#5B5CF6]/60 bg-indigo-50/60 shadow-[0_0_0_1px_rgba(91,92,246,0.12)]"
-                      : `${colors.border} ${colors.bg} hover:border-indigo-200 hover:shadow-sm`
+                        ? "border-primary/45 bg-card hover:bg-accent"
+                        : "border-border bg-card hover:border-primary/40"
                   } ${tier.disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer"}`}
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className={`text-sm font-black ${isSelected || isRecommended ? "text-[#5B5CF6]" : colors.text}`}>
+                    <div className={`text-sm font-bold ${isSelected || isRecommended ? "text-primary" : tier.color === "red" ? "text-red-700" : "text-foreground"}`}>
                       {tier.label.replace("常规价", "推荐价")}
                       {isSelected && <span className="ml-1 text-[10px] text-slate-500">（当前）</span>}
                     </div>
                     <div className="flex shrink-0 flex-wrap justify-end gap-1">
-                      {isRecommended && !isSelected && <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-[#5B5CF6]">推荐</span>}
-                      {isSelected && <span className="rounded-full bg-[#5B5CF6] px-2 py-0.5 text-[10px] font-bold text-white">当前</span>}
+                      {isRecommended && !isSelected && <span className="rounded bg-accent px-2 py-0.5 text-[10px] font-bold text-primary">推荐</span>}
+                      {isSelected && <span className="rounded bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">当前</span>}
                     </div>
                   </div>
                   {tier.disabled ? (
@@ -766,10 +758,10 @@ export function Dashboard({
                   ) : (
                     <>
                       <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-                        <div className={`text-2xl font-black leading-none tabular-nums ${isSelected ? "text-[#5B5CF6]" : colors.text}`}>
+                        <div className={`text-2xl font-black leading-none tabular-nums ${isSelected ? "text-primary" : "text-foreground"}`}>
                           ¥{tier.priceRMB.toFixed(2)}
                         </div>
-                        <div className="rounded-md bg-white/60 px-2 py-1 text-right text-xs font-black text-slate-700">
+                        <div className="rounded-md bg-secondary px-2 py-1 text-right text-xs font-bold text-foreground">
                           利润率 {tier.profitMargin}%
                         </div>
                       </div>
@@ -781,45 +773,45 @@ export function Dashboard({
                         <div className="truncate text-slate-500" title={tier.description}>适合：{tier.description}</div>
                       </div>
                       {ozonTierPricing.isValid && (
-                        <div className={`mt-2 rounded-lg px-2 py-1.5 text-[10px] text-slate-600 ${colors.soft}`}>
+                        <div className="mt-2 rounded-md bg-secondary px-2 py-1.5 text-[10px] text-muted-foreground">
                           <div className="grid grid-cols-2 gap-1.5">
-                            <div className="rounded-md bg-white/45 px-1.5 py-1">
+                            <div className="rounded-md bg-card px-1.5 py-1">
                               <div className="flex items-center justify-between gap-1">
-                                <span className="text-slate-500">后台</span>
+                                <span className="text-slate-500">最高价格</span>
                                 <button
                                   type="button"
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    onCopyOzonPrice?.(`${tier.label} 后台定价`, String(ozonTierPricing.ozonBackendPriceRMB));
+                                    onCopyOzonPrice?.(`${tier.label} 最高价格`, String(ozonTierPricing.highestPriceRMB));
                                   }}
                                   className="rounded p-0.5 text-slate-500 hover:bg-white/70"
-                                  title="复制后台定价"
+                                  title="复制最高价格"
                                 >
                                   <Copy className="h-3 w-3" />
                                 </button>
                               </div>
-                              <div className="font-bold text-slate-700">¥{ozonTierPricing.ozonBackendPriceRMB}</div>
+                              <div className="font-bold text-slate-700">¥{ozonTierPricing.highestPriceRMB}</div>
                             </div>
-                            <div className="rounded-md bg-white/45 px-1.5 py-1">
+                            <div className="rounded-md bg-card px-1.5 py-1">
                               <div className="flex items-center justify-between gap-1">
-                                <span className="text-slate-500">折扣前</span>
+                                <span className="text-slate-500">划线价</span>
                                 <button
                                   type="button"
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    onCopyOzonPrice?.(`${tier.label} 折扣前价格`, String(ozonTierPricing.ozonOriginalPriceRMB));
+                                    onCopyOzonPrice?.(`${tier.label} 划线价`, String(ozonTierPricing.strikePriceRMB));
                                   }}
                                   className="rounded p-0.5 text-slate-500 hover:bg-white/70"
-                                  title="复制折扣前价格"
+                                  title="复制划线价"
                                 >
                                   <Copy className="h-3 w-3" />
                                 </button>
                               </div>
-                              <div className="font-bold text-slate-700">¥{ozonTierPricing.ozonOriginalPriceRMB}</div>
+                              <div className="font-bold text-slate-700">¥{ozonTierPricing.strikePriceRMB}</div>
                             </div>
                           </div>
-                          <div className="mt-1 truncate text-[9px] text-slate-500" title={`RUB：后台 ₽${ozonTierPricing.ozonBackendPriceRUB} / 折扣前 ₽${ozonTierPricing.ozonOriginalPriceRUB}`}>
-                            RUB：后台 ₽{ozonTierPricing.ozonBackendPriceRUB} / 折扣前 ₽{ozonTierPricing.ozonOriginalPriceRUB}
+                          <div className="mt-1 truncate text-[9px] text-slate-500" title={`RUB：最高价格 ₽${ozonTierPricing.highestPriceRUB} / 划线价 ₽${ozonTierPricing.strikePriceRUB}`}>
+                            RUB：最高价格 ₽{ozonTierPricing.highestPriceRUB} / 划线价 ₽{ozonTierPricing.strikePriceRUB}
                           </div>
                         </div>
                       )}

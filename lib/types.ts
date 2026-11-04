@@ -1,4 +1,5 @@
 import type { ValueLimitCurrency } from "./currency";
+import type { PricingSettings } from "./ozon-pricing";
 
 export type FulfillmentMode = "RFBS" | "FBP";
 export type LogisticsMode = "thirdParty" | "OGL";
@@ -116,6 +117,7 @@ export interface CalculationInput {
   
   // 定价参数
   targetPriceRMB: number; // RMB (用户以人民币思维输入售价)
+  pricingSettings?: PricingSettings; // 兼容未保存价格系数的历史配置
   promotionDiscount: number; // 百分比
   
   // 全局设置
