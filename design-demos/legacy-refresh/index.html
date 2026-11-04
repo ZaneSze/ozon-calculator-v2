@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>旧版工作台｜界面优化初稿</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eef1f6;color:#18283f;font:16px/1.6 "Segoe UI","Microsoft YaHei UI",sans-serif}
+main{max-width:1512px;margin:auto;padding:36px 28px 42px}
+header{display:flex;justify-content:space-between;align-items:end;gap:16px;border-bottom:1px solid #cbd4e0;padding-bottom:16px;margin-bottom:20px}
+h1,h2,p{margin:0}h1{font-size:clamp(26px,3vw,41px);letter-spacing:-.04em;line-height:1.2}h2{font-size:17px}
+p{color:#4c5c72}header p{margin-top:7px}
+a{color:#1b46a0;text-underline-offset:3px}a:focus-visible,button:focus-visible{outline:2px solid #3159ad;outline-offset:3px}
+.tag{white-space:nowrap;font-size:13px;font-weight:650;border:1px solid #c8d6eb;background:#f7faff;padding:4px 10px;border-radius:100px;color:#315685}
+.options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 15px}
+.options button{text-align:left;border:1px solid #cbd4e0;background:#f9fbfd;color:#18283f;border-radius:9px;padding:11px 13px;min-height:57px;cursor:pointer;font:inherit;line-height:1.28}
+.options button[aria-pressed=true]{border-color:#3555ab;background:#e7eeff;box-shadow:0 0 0 1px #3555ab}
+.options b,.options small{display:block}.options small{margin-top:3px;color:#4c5c72;font-size:13px}
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+figure{margin:0;border:1px solid #cbd4e0;border-radius:9px;background:white;overflow:hidden;min-width:0}
+figcaption{padding:9px 11px;display:flex;align-items:center;justify-content:space-between;gap:7px;font-size:14px}
+figure>a{display:block;background:#e5eaf2;border-top:1px solid #d9e1eb}
+figure img{display:block;width:100%;aspect-ratio:8/5;object-fit:contain;object-position:top}
+.links{display:flex;flex-wrap:wrap;gap:7px 15px;margin-top:11px}.links a{min-height:44px;display:inline-flex;align-items:center}
+.note{border-top:1px solid #cbd4e0;margin-top:10px;padding-top:10px;font-size:14px}
+@media(max-width:720px){main{padding:20px 12px}header{align-items:start;flex-direction:column}.pair{grid-template-columns:1fr}.options{gap:6px}.options button{padding:6px 7px;font-size:13px}.options small{display:none}}
+</style>
+</head>
+<body><main>
+<header><div><h1>旧版工作台，整理一下</h1><p>同一份界面、同一组样例。保留原有三栏和操作顺序，只比较视觉处理。</p></div><span class="tag">独立视觉初稿</span></header>
+<div class="options" role="group" aria-label="选择初稿">
+  <button type="button" data-choice="a" aria-pressed="true"><b>A　紧凑规整</b><small>保留现有密度，统一间距和按钮。</small></button>
+  <button type="button" data-choice="b" aria-pressed="false"><b>B　清晰分区</b><small>强化区块标题和当前选中状态。</small></button>
+  <button type="button" data-choice="c" aria-pressed="false"><b>C　低彩专业</b><small>收敛大面积色块，细线区分层级。</small></button>
+</div>
+<div class="pair">
+  <figure><figcaption><h2>现有界面</h2><a href="screenshots/before.png">查看大图</a></figcaption><a href="screenshots/before.png"><img src="screenshots/before.png" alt="现有三栏界面，显示同一组 OGL 样例"></a></figure>
+  <figure><figcaption><h2 id="draft-title">A　紧凑规整</h2><a id="draft-full" href="screenshots/a.png">查看大图</a></figcaption><a id="draft-image-link" href="screenshots/a.png"><img id="draft-image" src="screenshots/a.png" alt="A 版优化初稿"></a></figure>
+</div>
+<div class="links">
+  <a id="layout-link" href="a.html">打开 A 版页面稿</a>
+  <a id="pricing-link" href="screenshots/a-pricing.png">查看定价参数细节</a>
+  <a id="mobile-link" href="screenshots/a-mobile.png">查看手机首屏</a>
+</div>
+<p class="note">操作区、参数顺序、定价建议、物流筛选都在原处。页面稿来自实际计算器的样例画面，可滚动查看与折叠参数；不连接业务计算、不保存或上传数据。</p>
+</main>
+<script>
+const names={a:"A　紧凑规整",b:"B　清晰分区",c:"C　低彩专业"};
+const find=id=>document.getElementById(id);
+function select(key){
+  document.querySelectorAll("[data-choice]").forEach(el=>el.setAttribute("aria-pressed",String(el.dataset.choice===key)));
+  find("draft-title").textContent=names[key];
+  const picture="screenshots/"+key+".png";
+  find("draft-full").href=picture;find("draft-image-link").href=picture;
+  find("draft-image").src=picture;find("draft-image").alt=names[key]+"优化初稿";
+  find("layout-link").href=key+".html";find("layout-link").textContent="打开 "+key.toUpperCase()+" 版页面稿";
+  find("pricing-link").href="screenshots/"+key+"-pricing.png";
+  find("mobile-link").href="screenshots/"+key+"-mobile.png";
+}
+document.querySelectorAll("[data-choice]").forEach(el=>el.addEventListener("click",()=>select(el.dataset.choice)));
+</script>
+</body></html>

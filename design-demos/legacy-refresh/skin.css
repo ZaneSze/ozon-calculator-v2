@@ -1,0 +1,93 @@
+/* 方向初稿专用。三栏、原有分组、按钮顺序和原生折叠保持不变。 */
+html{scrollbar-color:#b5bfcd transparent}
+body[data-look]{--desk:#edf1f6;--paper:#fff;--soft:#f4f6f9;--line:#d9e1ec;--ink:#192942;--muted:#526176;--accent:#344cb5;--accent-dark:#243b9e;--selected:#eaf0ff;--focus:#315bd2;--radius:9px;--gap:12px;--pad:11px;--btn:29px;--rail:350px;--ship:374px;--bar:47px;background:var(--desk);color:var(--ink);font-family:"Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif}
+body[data-look="b"]{--desk:#e9eff7;--paper:#fff;--soft:#f1f5fa;--line:#d4dfed;--ink:#162d4a;--muted:#4d6076;--accent:#174a9e;--accent-dark:#153c82;--selected:#e8f1ff;--focus:#235cac;--radius:11px;--gap:14px;--pad:12px;--btn:31px;--rail:350px;--ship:370px;--bar:50px}
+body[data-look="c"]{--desk:#ebf0ee;--paper:#fbfdfc;--soft:#eef4f1;--line:#d2dfd9;--ink:#20372f;--muted:#4c635a;--accent:#216c59;--accent-dark:#1b5949;--selected:#e1f1e9;--focus:#236951;--radius:6px;--gap:10px;--pad:10px;--btn:28px;--rail:350px;--ship:378px;--bar:46px}
+body[data-look] [data-ui="root"]{background:var(--desk);color:var(--ink);min-height:100vh}
+body[data-look] [data-ui="toolbar"]{height:var(--bar);background:var(--paper);border-color:var(--line);box-shadow:none}
+body[data-look] [data-ui="toolbar"]>div{max-width:1560px;padding-inline:16px}
+body[data-look] [data-ui="toolbar"] [title="Ozon 跨境利润精算工作台"]>span:first-child{background:var(--selected);color:var(--accent);border-color:var(--line);border-radius:7px;box-shadow:none}
+body[data-look] [data-ui="toolbar"] [title="Ozon 跨境利润精算工作台"]>span:last-child{font-size:14px;font-weight:750;color:var(--ink)}
+body[data-look] #global-diagnostic-bar{max-width:1560px;height:37px;background:var(--desk);border:0;padding-inline:16px}
+body[data-look] #global-diagnostic-bar [class*="shadow"]{box-shadow:none}
+body[data-look] #global-diagnostic-bar [class*="text-[11px]"]{font-size:11px}
+body[data-look] main{max-width:1560px;padding-inline:16px}
+body[data-look] [data-ui="metrics"]{margin:0 0 var(--gap);border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);box-shadow:none;min-height:59px;justify-content:flex-start;padding:6px 10px;gap:6px 10px}
+body[data-look] [data-ui="metrics"]>div:nth-child(-n+3){height:42px;min-width:114px;justify-content:space-between;border:1px solid var(--line);background:var(--soft);border-radius:7px;box-shadow:none;padding-inline:11px}
+body[data-look] [data-ui="metrics"]>div:nth-child(-n+3)>span:last-child{font-size:19px;font-weight:750}
+body[data-look] [data-ui="metrics"]>div>span:first-child{color:var(--muted);font-size:11px}
+body[data-look] [data-ui="metrics"]>div:nth-child(n+5){padding-inline:8px}
+body[data-look="b"] [data-ui="metrics"]>div:first-child{background:var(--selected);border-color:#a3bce3}
+body[data-look="c"] [data-ui="metrics"]>div:nth-child(-n+3){border:0;border-right:1px solid var(--line);border-radius:0;background:transparent}
+body[data-look] [data-ui="grid"]{margin-inline:0;gap:var(--gap)}
+body[data-look] [data-column]{min-width:0}
+body[data-look] [data-ui="finance"]{padding-right:1px}
+body[data-look] [data-ui="inputs"]>div>div{padding-right:1px}
+body[data-look] [data-ui="inputs"] details,body[data-look] [data-ui="finance"] [data-slot="card"],body[data-look] [data-ui="shipping-filter"],body[data-look] [data-ui="channel-card"]{background:var(--paper);border-color:var(--line);border-radius:var(--radius);box-shadow:none}
+body[data-look] [data-ui="inputs"] details>summary{min-height:36px;padding:5px var(--pad);font-size:14px;color:var(--ink);font-weight:700}
+body[data-look] [data-ui="inputs"] details>summary>span>span:last-child{color:var(--muted)}
+body[data-look] [data-ui="inputs"] details>summary svg:first-child,body[data-look] [data-ui="shipping-filter"] h3 svg{color:var(--accent)}
+body[data-look] [data-ui="inputs"] details>div{border-color:var(--line);padding:var(--pad)}
+body[data-look] [data-ui="inputs"] details>div label{color:var(--ink);font-size:12px}
+body[data-look="b"] [data-ui="inputs"] details[open]>summary{background:var(--soft);border-radius:var(--radius) var(--radius) 0 0}
+body[data-look="c"] [data-ui="inputs"] details>summary{min-height:33px}
+body[data-look] [data-ui="finance"] h2,body[data-look] [data-ui="finance"] h3,body[data-look] [data-ui="shipping-filter"] h3{color:var(--ink);font-size:16px;font-weight:750;letter-spacing:.01em}
+body[data-look] [data-ui="shipping-filter"]{padding:var(--pad)}
+body[data-look] [data-ui="shipping-filter"]>div:first-child>span{font-size:11px;color:var(--muted)}
+body[data-look] [data-ui="shipping-filter"] [role="group"]{gap:6px}
+body[data-look] [data-ui="ogl-info"]{background:var(--soft);border-color:var(--line);color:var(--muted);padding:7px 9px;font-size:11px;line-height:1.55;border-radius:7px}
+body[data-look] [data-ui="ogl-info"] a{color:var(--accent);text-underline-offset:2px}
+body[data-look] [data-ui="matrix"]{gap:8px}
+body[data-look] [data-ui="tier"]{background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:none;padding:9px}
+body[data-look] [data-ui="tier"][data-recommended]{border-color:var(--accent);background:var(--selected)}
+body[data-look] [data-ui="tier"]>div:last-child{background:var(--soft);border-radius:6px}
+body[data-look="b"] [data-ui="tier"][data-recommended]{outline:1px solid #9fb6db;outline-offset:-2px}
+body[data-look="c"] [data-ui="tier"]{padding:8px}
+body[data-look] [data-ui="channel-card"][data-selected]{background:var(--selected);border-color:var(--accent);outline:1px solid var(--accent);outline-offset:-1px}
+body[data-look] [data-ui="channel-current"]{background:var(--selected);color:var(--ink);border:1px solid var(--line);box-shadow:none}
+body[data-look] [data-ui="channel-current"] span{color:var(--ink)}
+body[data-look] [data-ui="channel-current"] [class*="text-white"]{color:var(--muted)}
+body[data-look] [data-ui="price-settings"]{background:var(--soft);border-color:var(--line);border-radius:var(--radius)}
+body[data-look] [data-ui="price-settings"] legend{color:var(--ink);font-size:13px}
+body[data-look] [data-ui="price-settings"] input{min-width:0}
+body[data-look] button[data-draft-control],body[data-look] input:not([type="file"]):not([type="hidden"]):not([type="range"]),body[data-look] button[role="combobox"]{background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:6px;box-shadow:none}
+body[data-look] input:not([type="file"]):not([type="hidden"]):not([type="range"]){min-height:28px}
+body[data-look] button[data-draft-control]{min-height:var(--btn);font-size:12px;font-weight:600;line-height:1.15;box-shadow:none}
+body[data-look] button[data-draft-control]:is([aria-pressed="true"],[data-active="true"],[data-draft-active]){background:var(--accent);color:#fff;border-color:var(--accent)}
+body[data-look="c"] button[data-draft-control]:is([aria-pressed="true"],[data-active="true"],[data-draft-active]){background:var(--selected);color:var(--accent-dark);border-color:var(--accent)}
+body[data-look] button[data-draft-control]:hover:not(:disabled):not([data-active="true"]):not([aria-pressed="true"]):not([data-draft-active]){background:var(--soft)}
+body[data-look] button[data-draft-control][data-reset]{color:#a13432;border-color:#e9d2d0}
+body[data-look] button[data-draft-control]:focus-visible,body[data-look] input:focus-visible,body[data-look] summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+body[data-look] [data-ui="amount"]{color:var(--accent-dark)}
+body[data-look] [data-draft-badge]{background:var(--selected);color:var(--accent-dark);box-shadow:none;border:1px solid var(--line)}
+body[data-look] [data-draft-stripe]{background:var(--accent)}
+body[data-look] [data-ui="cost-fill"]{height:39px;overflow:hidden;border-radius:6px}
+body[data-look="b"] [data-ui="cost-fill"]{height:45px}
+body[data-look="c"] [data-ui="cost-fill"]{height:32px}
+body[data-look] [data-ui="cost-legend"] [class*="text-[10px]"]{color:var(--muted)}
+body[data-look] [data-ui="cost-legend"]{row-gap:5px;column-gap:9px}
+body[data-look] [data-ui="cost-legend"]>div{font-size:11px;color:var(--ink)}
+body[data-look] [data-ui="cost-legend"]>div>b{flex-shrink:0}
+body[data-look] [data-ui="cost-fill"]>div[data-color="purchase"]{background:#526db4!important}
+body[data-look] [data-ui="cost-fill"]>div[data-color="profit"]{background:#bc4a49!important}
+body[data-look] [data-ui="cost-legend"] [data-color="purchase"]{background:#526db4!important}
+body[data-look] [data-ui="cost-legend"] [data-color="profit"]{background:#bc4a49!important}
+@media(min-width:1280px){
+  body[data-look] [data-ui="grid"]{grid-template-columns:var(--rail) minmax(390px,1fr) var(--ship);height:calc(100vh - var(--bar) - 118px)}
+  body[data-look] [data-ui="finance"]{max-height:none}
+  body[data-look] [data-ui="metrics"]>div:nth-child(n+5){flex:1}
+}
+@media(max-width:700px){
+  body[data-look] main{padding-inline:9px}
+  body[data-look] [data-ui="toolbar"]>div{padding-inline:9px}
+  body[data-look] [data-ui="toolbar"] [title="Ozon 跨境利润精算工作台"]>span:last-child{font-size:12px}
+  body[data-look] [data-ui="metrics"]{justify-content:space-between;gap:5px;padding:6px}
+  body[data-look] [data-ui="metrics"]>div:nth-child(-n+3){min-width:0;flex:1;padding-inline:6px}
+  body[data-look] [data-ui="metrics"]>div:nth-child(-n+3)>span:last-child{font-size:15px}
+  body[data-look] [data-ui="metrics"]>div:nth-child(n+5){padding-inline:3px}
+  body[data-look] [data-ui="metrics"]>div:nth-child(n+5)>span:last-child{font-size:11px}
+  body[data-look] [data-ui="matrix"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body[data-look] [data-ui="cost-legend"]>div>b>span{display:none}
+  body[data-look] [data-ui="inputs"] details>summary{min-height:42px}
+  body[data-look] [data-ui="shipping-filter"] button[data-draft-control]{min-height:33px}
+}

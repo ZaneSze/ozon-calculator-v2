@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>跨境精算工作台｜紧凑布局初稿</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#edf2f7;color:#1d304a;font:16px/1.55 "Segoe UI","Microsoft YaHei UI",sans-serif}
+main{max-width:1490px;margin:auto;padding:27px 26px 35px}h1,h2,p{margin:0}h1{font-size:clamp(28px,3.2vw,42px);line-height:1.15;letter-spacing:-.035em}h2{font-size:17px}p{color:#465b76}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-bottom:15px}header p{margin-top:8px}.label{font-size:13px;font-weight:650;color:#2e537f;border:1px solid #c7d5e9;background:#f9fbff;padding:5px 10px;border-radius:100px;white-space:nowrap}
+.choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:11px}.choices button{background:#fbfcff;border:1px solid #ccd8e8;color:#1d304a;text-align:left;min-height:59px;border-radius:8px;padding:8px 11px;font:inherit;cursor:pointer}
+.choices button[aria-pressed=true]{border-color:#35569c;outline:1px solid #35569c;background:#e6efff}.choices b,.choices small{display:block}.choices small{color:#465b76;font-size:13px}
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.pair figure{margin:0;background:#fff;border:1px solid #ccd8e8;border-radius:9px;overflow:hidden;min-width:0}
+figcaption{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:7px 10px;font-size:14px}figure>a{display:block;border-top:1px solid #ccd8e8;background:#f3f7fc}
+figure img{display:block;width:100%;aspect-ratio:8/5;object-fit:contain;object-position:top}
+a{color:#224c9f;text-underline-offset:3px}a:focus-visible,button:focus-visible{outline:2px solid #3159ad;outline-offset:3px}
+.actions{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:10px 0}.actions a{display:inline-flex;align-items:center;min-height:44px;font-size:14px}.actions .primary{padding:0 12px;color:white;background:#244b9c;border-radius:6px;text-decoration:none;font-weight:650}
+.priorities{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.priorities div{border-top:1px solid #ccd8e8;padding:8px 3px 0}.priorities b{display:block;font-size:14px}.priorities p,.foot{font-size:13px}.foot{margin-top:11px}
+@media(max-width:760px){main{padding:17px 12px}header{align-items:start;flex-direction:column}.pair{grid-template-columns:1fr}.choices{gap:4px}.choices button{min-height:49px;padding:5px 6px;font-size:13px}.choices small{display:none}.priorities{grid-template-columns:1fr}}
+</style></head><body><main>
+<header><div><h1>工作台紧凑布局初稿</h1><p>保留左参数、中结果、右物流。高频信息同屏，低频设置原地展开。</p></div><span class="label">同一组样例对照</span></header>
+<div class="choices" role="group" aria-label="切换布局方案">
+<button data-choice="a" aria-pressed="true"><b>A　报价与利润同屏</b><small>两段系数直接可见，适合反复试价。</small></button>
+<button data-choice="b" aria-pressed="false"><b>B　商品参数先行</b><small>尺寸和重量在左栏最上，适合频繁换商品。</small></button>
+<button data-choice="c" aria-pressed="false"><b>C　六档方案先行</b><small>先对照不同利润目标的报价，再核对成本。</small></button>
+</div>
+<div class="pair">
+<figure><figcaption><h2>现有布局</h2><a href="../legacy-refresh/screenshots/before.png">看原版大图</a></figcaption><a href="../legacy-refresh/screenshots/before.png"><img src="../legacy-refresh/screenshots/before.png" alt="旧布局：定价需要向下滚动，物流说明与大卡片占据首屏"></a></figure>
+<figure><figcaption><h2 id="caption">A　报价与利润同屏</h2><a id="desktop" href="screenshots/a.png">看初稿大图</a></figcaption><a id="picture" href="screenshots/a.png"><img id="preview" src="screenshots/a.png" alt="A 版布局：定价、利润、六档建议和可发物流同屏"></a></figure>
+</div>
+<div class="actions"><a class="primary" id="open-draft" href="a.html">打开 A 版页面稿</a><a id="mobile" href="screenshots/a-mobile.png">手机排版长图</a></div>
+<div class="priorities">
+<div><b>首屏常显</b><p>目标售价、净利和利润率、六档建议、可用渠道与费用。</p></div>
+<div><b>就地展开</b><p>商品与采购细项、定价卡片明细、运费规则和拦截原因。</p></div>
+<div><b>低频工具</b><p>竞品、预警、促销、税务、广告和汇率风险归入原区块。</p></div>
+</div>
+<p class="foot">独立布局初稿。可展开、折叠和在手机上跳转模块；样例价格不重算，原系统未改动。</p>
+</main><script>
+const names={a:"A　报价与利润同屏",b:"B　商品参数先行",c:"C　六档方案先行"};
+const get=id=>document.getElementById(id);
+document.querySelectorAll("[data-choice]").forEach(btn=>btn.addEventListener("click",()=>{
+ const key=btn.dataset.choice, src="screenshots/"+key+".png";
+ document.querySelectorAll("[data-choice]").forEach(el=>el.setAttribute("aria-pressed",String(el===btn)));
+ get("caption").textContent=names[key];get("preview").src=src;get("preview").alt=names[key]+"桌面布局";
+ get("desktop").href=src;get("picture").href=src;get("open-draft").href=key+".html";
+ get("open-draft").textContent="打开 "+key.toUpperCase()+" 版页面稿";get("mobile").href="screenshots/"+key+"-mobile.png";
+}));
+</script></body></html>
